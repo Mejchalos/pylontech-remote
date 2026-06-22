@@ -1,0 +1,6 @@
+# Release the FTDI USB/RS232 adapter from Venus OS serial-starter so the
+# Pylontech console reader can use it. Match by the adapter's serial number
+# (run install.sh to auto-detect and generate this file with your serial).
+#
+# Find your serial:  udevadm info -q property -n /dev/ttyUSB0 | grep ID_SERIAL_SHORT
+ACTION=="add", SUBSYSTEM=="tty", ENV{ID_SERIAL_SHORT}=="YOURSERIAL", ENV{VE_SERVICE}="ignore"
