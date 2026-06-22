@@ -14,6 +14,9 @@ the stack.
 *Per-module view: pack summary, per-module SOC / current / temp / capacity / SOH / cycles,
 15-cell colour bar and BHV history.*
 
+[![Ko-fi](https://img.shields.io/badge/Ko--fi-Support%20this%20project-FF5E5B?logo=ko-fi&logoColor=white)](https://ko-fi.com/tejnoo)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+
 ---
 
 ## What you get
@@ -198,6 +201,18 @@ svc -d /service/serial-starter && sleep 1 && svc -u /service/serial-starter
 
 **After a Venus OS update** — the rule in `/etc` may be gone (the `/data` copy persists):
 re-run `sh install.sh`, or copy the rule from `/data/etc/udev/rules.d/` back to `/etc/...`.
+
+---
+
+## Support
+
+I build and maintain these tools in my spare time for the Victron / DIY-solar community.
+If this saved you time, a coffee keeps it going:
+
+[![Ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/tejnoo)  →  **[ko-fi.com/tejnoo](https://ko-fi.com/tejnoo)**
+
+I'm also happy to **set it up on your system** or build custom tweaks (paid) — open an issue
+or reach out via Ko-fi.
 
 ---
 
