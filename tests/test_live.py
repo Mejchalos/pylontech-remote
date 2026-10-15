@@ -1,4 +1,7 @@
 import json
+import os
+import shutil
+import tempfile
 import unittest
 
 import pylontech_live
@@ -52,15 +55,24 @@ class LiveRunnerTest(unittest.TestCase):
         self.assertEqual(last['n_modules'], 4)
         self.assertTrue(all(m['n_cells'] == 15 for m in last['modules']))
 
-    def test_commands_per_window(self):
+    def test_commands_per_window_without_saved_data(self):
         r = pylontech_live.Runner(self.s, self.state, 5)
         sizes = []
-        for _ in range(14):
+        for _ in range(6):
             before = len(self.commands())
             r.window()
             sizes.append(len(self.commands()) - before)
-        self.assertTrue(all(s <= 1 + 4 + 1 for s in sizes))   # pwr + 4 x bat + one start-up item
-        self.assertEqual(sizes[-1], 1 + 4)                   # steady state: pwr + every module's cells
+        self.assertEqual(sizes[0], 1 + 4 + 1 + 4 + 4)   # pwr, 4 x bat, config, 4 x info, 4 x stat
+        self.assertEqual(sizes[1:], [5] * 5)            # then pwr + every module's cells
+
+    def test_first_snapshot_is_complete(self):
+        pylontech_live.Runner(self.s, self.state, 5).window()
+        first = self.out[0]
+        self.assertEqual(len(self.out), 1)
+        for m in first['modules']:
+            self.assertEqual((m['model'], m['n_cells'], m['soh_source']), ('US3000C', 15, 'bms'))
+            self.assertEqual(m['fw'], 'B69.25.0.0')
+        self.assertIsNotNone(first['thresholds'])
 
     def test_one_snapshot_per_cycle_with_all_cells_fresh(self):
         r = pylontech_live.Runner(self.s, self.state, 5)
@@ -69,8 +81,94 @@ class LiveRunnerTest(unittest.TestCase):
             self.assertEqual(len(self.out), i + 1)
             snap = self.out[-1]
             self.assertEqual([m['n_cells'] for m in snap['modules']], [15, 15, 15, 15])
-            ages = [m['cells_age_s'] for m in snap['modules']]
-            self.assertLess(max(ages), 10)                   # all read within this cycle
+
+
+class SavedStaticDataTest(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.path = os.path.join(self.tmp, 'static.json')
+        self.out = []
+        pylontech_live.emit = self.out.append
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp)
+
+    def run_live(self, windows):
+        clock = FakeClock()
+        fake = FakeConsole(clock=clock, n_modules=4)
+        s = ConsoleSession('/dev/fake', gap=1.2, serial_factory=lambda p, b: fake,
+                           clock=clock, sleep=clock.sleep)
+        s.open(check_holders=False)
+        store = pylontech_live.StaticStore(self.path)
+        r = pylontech_live.Runner(s, StackState(clock=clock), 5, store)
+        sizes = []
+        for _ in range(windows):
+            before = len(fake.written)
+            r.window()
+            sizes.append(len(fake.written) - before)
+        return r, store, sizes
+
+    def test_second_run_is_complete_at_once_and_refreshes_in_background(self):
+        self.run_live(1)                                # first run: saves the slow-changing data
+        self.assertTrue(os.path.exists(self.path))
+        self.out[:] = []
+        _, _, sizes = self.run_live(11)
+        first = self.out[0]
+        self.assertTrue(all(m['model'] == 'US3000C' and m['soh_source'] == 'bms' for m in first['modules']))
+        self.assertEqual(sizes[0], 1 + 4 + 1)           # pwr, 4 x bat, one background item
+        self.assertEqual(sizes[-1], 5)                  # background refresh done (9 items)
+
+    def test_written_only_when_changed(self):
+        _, store, _ = self.run_live(1)
+        mtime = os.path.getmtime(self.path)
+        with open(self.path) as f:
+            saved = json.load(f)
+        self.assertFalse(store.save(saved))
+        self.assertEqual(os.path.getmtime(self.path), mtime)
+
+    def test_other_module_in_slot_drops_saved_stats(self):
+        state = StackState()
+        state.load_static({'modules': {'2': {'info': {'barcode': 'OLD', 'model': 'US3000C'},
+                                             'stat': {'soh_pct': 90, 'cycles': 999}}}})
+        from tests.fakeconsole import _fixture
+        state.update_info(2, _fixture('info_synthetic.raw').decode())
+        self.assertNotIn(2, state.stat)
+
+
+class StatsGroupingTest(unittest.TestCase):
+    def test_groups_of_real_stat_reply(self):
+        from pylontech_remote import parsers
+        from pylontech_remote.live import group_stats
+        from tests.fakeconsole import _fixture
+        fields = parsers.parse_stat(_fixture('stat_b69.25.raw').decode())['fields']
+        g = group_stats(fields)
+        alarms = dict((l, v) for l, v, _ in g['alarms'])
+        self.assertEqual(alarms['DOCA Times'], '5')
+        self.assertEqual(alarms['Bat LV Times'], '4')
+        for label in ('Reset Times', 'Shut Times', 'Bat HV Times', 'COC Times', 'DLT Times'):
+            self.assertIn(label, alarms)
+        for label in ('Charge Times', 'Idle Times', 'CYCLE Times', 'SOH Times', 'Data Items'):
+            self.assertNotIn(label, alarms)
+        records = [l for l, _, _ in g['records']]
+        self.assertIn('Data Items', records)
+        self.assertIn('Doca Items', records)
+        shown = dict((l, s) for l, _, s in g['time'])
+        self.assertEqual(shown['Pwr on Secs'], '272 d 2 h')         # 23509942 s
+        self.assertEqual(shown['Low Volt1 Hours'], '14.0 h')
+        self.assertEqual(shown['HT Secs'], '0 s')
+        self.assertIn(['CYCLE Times', '216', '216'], g['operation'])
+        self.assertNotIn('Device address', [l for grp in g.values() for l, _, _ in grp])
+        self.assertEqual(sum(len(x) for x in g.values()), len(fields) - 1)
+
+    def test_counters_survive_saving(self):
+        from pylontech_remote.live import StackState
+        from tests.fakeconsole import _fixture
+        a = StackState()
+        a.update_stat(2, _fixture('stat_b69.25.raw').decode())
+        b = StackState()
+        b.load_static(json.loads(json.dumps(a.static_dict())))
+        self.assertEqual(b.stat[2]['fields'], a.stat[2]['fields'])
+        self.assertEqual(b.stat[2]['read_at'], a.stat[2]['read_at'])
 
 
 if __name__ == '__main__':

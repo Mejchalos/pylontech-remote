@@ -50,18 +50,59 @@ def error_line(msg):
     return {'ok': False, 'error': msg, 'modules': [], 'live': False}
 
 
-class Runner(object):
-    """Per cycle: `pwr`, the cells of every module (`bat N`), and while any are pending one
-    slow-changing item (`config`, `info N`, `stat N`); one snapshot at the end of the cycle."""
+class StaticStore(object):
+    """Model/serial/firmware/statistics/thresholds kept between runs (a small JSON file).
+    Written only when the content changed."""
 
-    def __init__(self, session, state, interval):
+    def __init__(self, path):
+        self.path = path
+        self._saved = None
+
+    def load(self):
+        try:
+            with open(self.path) as f:
+                data = json.load(f)
+        except (OSError, ValueError):
+            return None
+        self._saved = json.dumps(data, sort_keys=True)
+        return data
+
+    def save(self, data):
+        text = json.dumps(data, sort_keys=True)
+        if text == self._saved:
+            return False
+        tmp = self.path + '.tmp'
+        try:
+            with open(tmp, 'w') as f:
+                f.write(text)
+            os.replace(tmp, self.path)     # atomic; also overwrites on Windows (tests)
+        except OSError as e:
+            sys.stderr.write('cannot save %s: %s\n' % (self.path, e))
+            return False
+        self._saved = text
+        return True
+
+
+class Runner(object):
+    """Per cycle: `pwr`, the cells of every module (`bat N`), then slow-changing data
+    (`config`, `info N`, `stat N`); one snapshot at the end of the cycle.
+
+    Slow-changing data missing for a module is read in the same cycle, so the first snapshot is
+    already complete. Data known from an earlier run (StaticStore) is shown at once and refreshed
+    in the background, one item per cycle."""
+
+    def __init__(self, session, state, interval, store=None):
         self.s = session
         self.state = state
         self.interval = interval
-        self.static = collections.deque()
+        self.store = store
+        self.static = collections.deque()    # background refresh, one per cycle
+        self.urgent = collections.deque()    # missing data, read before the next snapshot
         self.known = set()
         self.last_static = None
         self.failures = 0
+        if store is not None:
+            state.load_static(store.load())
 
     def run_cmd(self, command):
         reply = self.s.command(command)
@@ -83,10 +124,10 @@ class Runner(object):
         new = sorted(ids - self.known)
         self.known = ids
         if new:
-            if self.state.thresholds is None:
-                self.static.append(('config', None))
-            self.static.extend(('info', n) for n in new)
-            self.static.extend(('stat', n) for n in new)
+            (self.static if self.state.thresholds else self.urgent).append(('config', None))
+            for n in new:
+                queue = self.static if (n in self.state.info and n in self.state.stat) else self.urgent
+                queue.extend((('info', n), ('stat', n)))
 
     def do_task(self, task):
         kind, n = task
@@ -110,21 +151,35 @@ class Runner(object):
             if _stop:
                 return
             self.do_task(('bat', n))
-        if self.static and not _stop:
+        had_urgent = bool(self.urgent)
+        while self.urgent and not _stop:
+            self.do_task(self.urgent.popleft())
+        emit(self.state.snapshot())
+        # background refresh after the snapshot: it shows up in the next cycle
+        if self.static and not had_urgent and not _stop:
             self.do_task(self.static.popleft())
             if not self.static:
                 self.last_static = time.time()
-        elif self.last_static is not None and time.time() - self.last_static >= STATIC_REFRESH_S:
+        elif (not self.static and self.last_static is not None
+              and time.time() - self.last_static >= STATIC_REFRESH_S):
             self.last_static = time.time()
             self.static.extend(('stat', n) for n in ids)   # SOH, cycles, alarm counters
-        emit(self.state.snapshot())
+        if had_urgent and not self.static and self.last_static is None:
+            self.last_static = time.time()
+        self.save_static()
+
+    def save_static(self):
+        # not in the middle of a background round: one write per round, not one per module
+        if self.store is not None and self.state.info and not self.static:
+            self.store.save(self.state.static_dict())
 
     def once(self):
         self.do_pwr()
         for n in sorted(self.known):
             self.do_task(('bat', n))
-        while self.static and not _stop:
-            self.do_task(self.static.popleft())
+        while (self.urgent or self.static) and not _stop:
+            self.do_task((self.urgent or self.static).popleft())
+        self.save_static()
         return self.state.snapshot(live=False)
 
 
@@ -136,6 +191,9 @@ def main():
     ap.add_argument('--gap', type=float, default=1.2, help='minimum pause between commands (s)')
     ap.add_argument('--max-minutes', type=float, default=35.0)
     ap.add_argument('--once', action='store_true')
+    ap.add_argument('--state-file', default=os.environ.get(
+        'PYLONTECH_STATE', '/data/pylontech/state/static.json'),
+        help="model/serial/firmware/statistics kept between runs ('' = do not keep)")
     a = ap.parse_args()
 
     signal.signal(signal.SIGTERM, _on_signal)
@@ -149,7 +207,8 @@ def main():
         return 2
 
     state = StackState()
-    runner = Runner(session, state, a.interval)
+    store = StaticStore(a.state_file) if a.state_file else None
+    runner = Runner(session, state, a.interval, store)
     try:
         if a.once:
             emit(runner.once())

@@ -3,9 +3,46 @@
 `StackState.snapshot()` returns the same JSON shape as the original pylontech_reader.py (so the
 existing dashboard widget keeps working), plus freshness information for the live view.
 """
+import re
 import time
 
 from . import parsers
+
+# `stat` counters of protection / alarm events (everything else ending in "Times" is operation).
+_ALARM_RE = re.compile(
+    r'^(COC2?|DOC2?|COCA|DOCA|SC|(Bat|Pwr) (OV|HV|LV|UV|SLP)|COT|CUT|DOT|DUT|CHT|CLT|DHT|DLT|'
+    r'Shut|Reset|RV|Input OV|BMICERR|LifeWarn|LifeAlarm) Times$')
+_TIME_RE = re.compile(r'(Secs?|Hours)$')
+
+
+def _fmt_duration(label, value):
+    n = parsers.to_int(value)
+    if n is None:
+        return value
+    secs = n * 3600 if label.endswith('Hours') else n
+    if secs < 3600:
+        return '%d s' % secs if secs < 60 else '%d min' % (secs // 60)
+    hours = secs / 3600.0
+    return '%.1f h' % hours if hours < 48 else '%d d %d h' % (hours // 24, hours % 24)
+
+
+def group_stats(fields):
+    """Split `stat` lines into alarms / operation / time / records for the dashboard.
+    Each item is [label, value, shown]: `shown` is the value for display (durations as h / d),
+    `value` the raw text from the battery."""
+    groups = {'alarms': [], 'operation': [], 'time': [], 'records': []}
+    for label, value in fields:
+        if label == 'Device address':
+            continue
+        if _ALARM_RE.match(label):
+            groups['alarms'].append([label, value, value])
+        elif label.endswith('Items'):
+            groups['records'].append([label, value, value])
+        elif _TIME_RE.search(label):
+            groups['time'].append([label, value, _fmt_duration(label, value)])
+        else:
+            groups['operation'].append([label, value, value])
+    return groups
 
 # Nominal Ah per module model (48 V). Unknown models fall back to 74 Ah.
 NOMINAL_AH = {
@@ -48,12 +85,16 @@ class StackState(object):
     def update_info(self, module, text):
         info = parsers.parse_info(text)
         if info.get('barcode') or info.get('model'):
+            old = self.info.get(module)
+            if old and old.get('barcode') != info.get('barcode'):
+                self.stat.pop(module, None)   # another module in this slot: cached stats are not its
             self.info[module] = info
         return info
 
     def update_stat(self, module, text):
         stat = parsers.parse_stat(text)
         if stat.get('soh_pct') is not None or stat.get('cycles') is not None:
+            stat['read_at'] = int(self._clock())
             self.stat[module] = stat
         return stat
 
@@ -62,6 +103,41 @@ class StackState(object):
         if cfg:
             self.thresholds = cfg
         return cfg
+
+    # -- slow-changing data, kept between runs ----------------------------------------------
+    _INFO_KEYS = ('address', 'model', 'barcode', 'fw')
+    # `fields` (all counters) change on every read: the runner saves after a whole refresh round
+    _STAT_KEYS = ('address', 'soh_pct', 'cycles', 'bat_hv_times', 'fields', 'read_at')
+
+    def static_dict(self):
+        """Model, serial, firmware, statistics and thresholds — what `info`, `stat` and `config`
+        return. Saved between runs so the dashboard is complete from the first update."""
+        mods = {}
+        for n in sorted(set(self.info) | set(self.stat)):
+            entry = {}
+            if n in self.info:
+                entry['info'] = dict((k, self.info[n].get(k)) for k in self._INFO_KEYS)
+            if n in self.stat:
+                entry['stat'] = dict((k, self.stat[n].get(k)) for k in self._STAT_KEYS)
+            mods[str(n)] = entry
+        return {'thresholds': self.thresholds, 'modules': mods}
+
+    def load_static(self, data):
+        if not isinstance(data, dict):
+            return
+        if data.get('thresholds'):
+            self.thresholds = data['thresholds']
+        for key, entry in (data.get('modules') or {}).items():
+            try:
+                n = int(key)
+            except ValueError:
+                continue
+            if entry.get('info'):
+                self.info[n] = dict(entry['info'], fields=[])
+            if entry.get('stat'):
+                stat = dict(entry['stat'])
+                stat['fields'] = [tuple(f) for f in stat.get('fields') or []]
+                self.stat[n] = stat
 
     @property
     def module_ids(self):
@@ -137,6 +213,8 @@ class StackState(object):
             'state':        p.get('base_state'),
             'pwr_age_s':    round(now - self.pwr_ts, 1) if (p and self.pwr_ts) else None,
             'cells_age_s':  round(now - self.cells_ts[n], 1) if n in self.cells_ts else None,
+            'stats':        group_stats(stat.get('fields') or []),
+            'stats_read_at': stat.get('read_at'),
         }
 
     def snapshot(self, live=True):
