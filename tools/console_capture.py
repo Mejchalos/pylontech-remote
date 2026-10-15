@@ -34,6 +34,8 @@ ALLOWED = [
     r'bat [1-9]',
     r'stat [1-9]',
     r'data (event|history) [0-9]{1,4}',
+    r'log',
+    r'datalist( (event|history))?( (item|bat))?( [0-9]{1,4})?( (volt|curr|temp|coul))?( [0-9]{1,4})?',
 ]
 
 # A line that is only a prompt word followed by '>' (e.g. "pylon>",

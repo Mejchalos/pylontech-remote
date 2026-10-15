@@ -27,8 +27,8 @@ Read commands relevant for history:
 | Command | Help text |
 |---|---|
 | `data [event/history/pov/puv/plv/bov/buv/inputov/coc/coca/doc/doca/sc/use][item]` | History data load |
-| `datalist [event/history/…][item/bat][batnun][volt/curr/temp/coul][item]` | Show recorded data (not tried yet) |
-| `log` | Log information show (not tried yet) |
+| `datalist [event/history/…][item/bat][batnun][volt/curr/temp/coul][item]` | Show recorded data — `datalist`, `datalist history`, `… item 1`, `… bat 1` all return usage; full argument meaning unknown, not pursued |
+| `log` | Log information show — see below |
 
 `data` is also listed under "Remote command" (as are `info`, `stat`, `config`, `soh`); how a
 remote module is addressed from the console is not known yet.
@@ -42,8 +42,10 @@ remote module is addressed from the console is not known yet.
   (ring buffer) is not verified yet — re-read index 1 and the max after the next record.
 - Events: 1…85 (2025-06-25 … 2026-07-15), written on alarms/state changes (BHV, BLV, PLV, DOCA,
   SYSERR, …). Some flag values (e.g. `0x40`) are printed without a name.
-- Timestamps: `YY-MM-DD HH:MM:SS`, **battery local time** (matched the Cerbo's CEST clock within
-  ~11 s), no time zone in the record.
+- Timestamps: `YY-MM-DD HH:MM:SS`, battery local time, no time zone in the record. The battery
+  clock runs **~9 min ahead** of the Cerbo (CEST): the newest `log` entry was stamped 17:19:43
+  when the Cerbo showed 17:10:53. The archive must store the battery time verbatim and record the
+  observed offset at sync time; the clock is never set (`time` is forbidden).
 - The records hold the **master module's own** values (module current/SOC match module 1, Total
   Coulomb 74000 mAh = one US3000C). Reading slave history from the master console is not solved.
 
@@ -73,6 +75,21 @@ Battery  Volt     Curr     Tempr    Base State   Volt. State  Curr. State  Temp.
 0        3339     -713     23300    Dischg       Normal       Normal       Normal       89%
 … 15 cell rows (0–14)
 ```
+
+## `log`
+
+Text log of the master (`ModID : BMM`), **newest first**, only 32 entries (index 31…0). On
+2026-10-15 it covered just ~18 minutes of charge/discharge toggling around 0 A, e.g.:
+
+```
+ Index   : 31
+ Time    : 26-10-15 17:19:43
+ ModID   : BMM
+ Code    : 0
+ Info    : The device start discharging.
+```
+
+11 pages, ~2.2 s with Enter paging. Low archive value unless polled often.
 
 ## Time budget for a full download
 

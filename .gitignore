@@ -1,2 +1,3 @@
 # Local battery captures (raw console output, serial numbers) - never commit
 captures/
+__pycache__/
