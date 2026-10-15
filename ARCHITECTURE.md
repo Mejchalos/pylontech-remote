@@ -1,6 +1,9 @@
 # Architecture — Pylontech Remote
 
-Status: **proposal** (phase 4, 2026-10-15). No code is written against it yet.
+Status: **proposal** (phase 4, 2026-10-15), first part implemented: the console core
+(`pylontech_remote/`: allow-list §4.2, session, parsers) and the realtime live reader
+(`pylontech_live.py`). Until the service exists, Live is started by the Node-RED Live switch
+(exec node, JSON lines on stdout) instead of MQTT (§4.7); archive, sync and export are not built yet.
 Facts it relies on are verified in [docs/CONSOLE-NOTES.md](docs/CONSOLE-NOTES.md) and
 [CHANGES-ON-CERBO.md](CHANGES-ON-CERBO.md).
 

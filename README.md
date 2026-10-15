@@ -1,224 +1,175 @@
 # pylontech-rs232-venus
 
 Per-module **Pylontech BMS monitoring** for **Victron Cerbo GX / Venus OS**, read over the
-battery's **RS232 console port** through a USB/RS232 (FTDI) adapter — with a ready-made
-Node-RED dashboard.
+battery's **RS232 console port** through a USB/RS232 adapter — with a Node-RED dashboard.
 
-The Victron CAN bus only exposes pack-level aggregates. This package reads the **RS232
-console** directly, giving you **per-module and per-cell** data: cell voltages, temperatures,
-SOC, SOH, balancing state, cycle counts and BMS protection thresholds — for every module in
-the stack.
+> **This branch (`pylontech-remote`) is work in progress** towards a remote equivalent of
+> Pylontech BatteryView: a realtime dashboard now, and soon a complete history/event archive kept
+> beyond what the battery stores (~37 days), exported in the format Pylontech support asks for.
+> Design: [ARCHITECTURE.md](ARCHITECTURE.md) · Console findings: [docs/CONSOLE-NOTES.md](docs/CONSOLE-NOTES.md).
+> Based on the original project by **Martin (tejno)** — see [Credits](#credits).
+
+The Victron CAN bus only exposes pack-level aggregates. The RS232 console of the **master** module
+gives **per-module and per-cell** data for the whole stack: cell voltages, temperatures, SOC, SOH,
+balancing, cycle counts, BMS thresholds — and the history and event records of every module.
 
 ![Pylontech BMS dashboard — /battery page](docs/dashboard.png)
 
-*Per-module view: pack summary, per-module SOC / current / temp / capacity / SOH / cycles,
-15-cell colour bar and BHV history.*
+---
 
-[![Ko-fi](https://img.shields.io/badge/Ko--fi-Support%20this%20project-FF5E5B?logo=ko-fi&logoColor=white)](https://ko-fi.com/tejnoo)
-[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+## Status
+
+| Part | State |
+|---|---|
+| Realtime dashboard (Live switch) | **works** — `pylontech_live.py` + `nodered/pylontech_flow.json` |
+| Read-only safety (command allow-list) | **works** — `pylontech_remote/allowlist.py`, covered by tests |
+| History / event research, slave modules through the master | **done** — [docs/CONSOLE-NOTES.md](docs/CONSOLE-NOTES.md) |
+| History archive (SQLite), incremental sync, BatteryView export | planned — [ARCHITECTURE.md](ARCHITECTURE.md) |
+| Long-running service, boot persistence, new installer | planned — the old `install.sh` is **legacy**, see below |
+
+Verified on a 4× US3000C stack, firmware B69.25.0.0, Venus OS v3.81 (Cerbo GX).
+Other firmwares may differ (see the notes).
 
 ---
 
-## What you get
+## Safety
 
-- **`pylontech_reader.py`** — universal Python reader. Auto-detects the number of modules
-  (`bat 1..9`), reads model/capacity from each module, outputs one JSON document.
-- **`nodered/pylontech_flow.json`** — self-contained Node-RED flow: poller → reader → parser →
-  dashboard widget (Dashboard 2.0). Imports cleanly into a fresh Node-RED.
-- **`install.sh`** — one-shot installer for the Cerbo: frees the serial port, installs
-  dependencies, deploys the reader, runs a self-test.
-
-Works with any Pylontech US-series stack (US5000 / US3000C / US3000 / US2000…), any module
-count, on any Venus OS device.
+- The battery only ever receives **read** commands. Every command passes one allow-list
+  (`pylontech_remote/allowlist.py`) before a byte is written; commands that change, clear, test or
+  control anything (`time`, `datac`, `config <x> <val>`, `shut`, `ctrl`, …) are refused. Tests
+  assert this.
+- Nothing on the Victron side is changed (no ESS/DVCC/BMS settings, no D-Bus battery service). The
+  BMS-CAN link is not touched.
+- The port is opened exclusively, with DTR/RTS low before opening (the battery does not answer with
+  them asserted).
 
 ---
 
 ## Hardware
 
 | Item | Detail |
-|------|--------|
-| Adapter | USB ↔ RS232, **FTDI FT232R** chipset (any brand) |
-| Cable | RJ45 → DB9, into the Pylontech **console** port of the **master** module |
-| Link | 115200 baud, 8N1, **no flow control**, **DTR/RTS = False** |
-| Topology | Master ↔ slaves over the internal RS485 — the console reads them all |
+|---|---|
+| Adapter | USB ↔ RS232. **FTDI (FT232R) recommended** — it has a serial number, so the udev rule follows the cable to any USB socket. A CH340 works too (tested), but has no serial number: the rule then matches the USB socket. |
+| Cable | RJ45 → DB9 into the **Console** port of the **master** module only — the master relays the slaves. |
+| Link | 115200 8N1, no flow control, **DTR/RTS = False** |
 
-> **DTR/RTS must be False** — with them asserted the battery does not reply. The reader sets
-> this; if you test with another tool, set it there too.
+### Keep Venus OS away from the port
 
----
+Venus OS's `serial-starter` probes every USB serial adapter as one of its own devices (an FT232R as
+RS485, a CH340 as a Zigbee energy-meter converter) and writes probe traffic to the battery console.
+A udev rule must set `VE_SERVICE=ignore` for the adapter. Two details matter:
 
-## Prerequisites on the Cerbo
+- name the file so it sorts **after** `serial-starter.rules`, e.g. `zz-pylontech-console.rules`
+  (a `99-…` rule is processed first and then overridden);
+- `/etc` is replaced by a Venus OS update — re-create the rule after updating (boot persistence is
+  part of the planned service).
 
-1. **Root SSH** access (`ssh root@<cerbo-ip>`).
-2. **Python 3** (present on Venus OS large images) + **pyserial** (the installer adds it).
-3. **Node-RED** with **Dashboard 2.0** (`@flowfuse/node-red-dashboard`) installed — same UI
-   framework the flow is built on. Install it from the Node-RED palette manager if missing.
+```
+# FTDI: by serial number   (udevadm info -q property -n /dev/ttyUSB0 | grep ID_SERIAL_SHORT)
+ACTION=="add", SUBSYSTEM=="tty", ENV{ID_SERIAL_SHORT}=="YOURSERIAL", ENV{VE_SERVICE}="ignore"
+# adapter without serial (e.g. CH340): by vendor/product + USB socket   (… | grep -E 'ID_VENDOR_ID|ID_MODEL_ID|ID_PATH')
+ACTION=="add", SUBSYSTEM=="tty", ENV{ID_VENDOR_ID}=="1a86", ENV{ID_MODEL_ID}=="7523", ENV{ID_PATH}=="platform-1c14400.usb-usb-0:1:1.0", ENV{VE_SERVICE}="ignore"
+```
 
----
-
-## Install
+Apply it to that port only (serial-starter then releases the port by itself):
 
 ```bash
-# on a dev machine: copy the package to the Cerbo
-scp -r pylontech-rs232-venus root@<cerbo-ip>:/data/
-
-# on the Cerbo:
-ssh root@<cerbo-ip>
-cd /data/pylontech-rs232-venus
-sh install.sh
+udevadm control --reload-rules
+udevadm trigger --action=add --subsystem-match=tty --sysname-match=ttyUSB0
+udevadm info -q property -n /dev/ttyUSB0 | grep VE_SERVICE     # → VE_SERVICE=ignore
+fuser /dev/ttyUSB0                                               # → nothing
 ```
 
-The installer will:
-1. **Auto-detect** the FTDI adapter and its serial number.
-2. Write a udev rule (`/etc/udev/rules.d/99-pylontech-ftdi.rules`, mirrored to `/data/etc/...`
-   so it survives OS updates) that sets `VE_SERVICE=ignore` for **that specific adapter** —
-   so Venus OS `serial-starter` / `gps_dbus` stops grabbing the port.
-3. Reload udev and restart `serial-starter`.
-4. Install **pyserial** (via `opkg` or `pip3`).
-5. Copy the reader to `/data/pylontech_reader.py` and run a **self-test**.
+---
 
-If your adapter is not on `/dev/ttyUSB0`, force it:
+## Install (current, manual)
+
+Prerequisites on the Cerbo: root SSH, Venus OS **Large** (Python 3 + pyserial are included),
+Node-RED with **Dashboard 2.0** (`@flowfuse/node-red-dashboard`, install from the palette manager).
 
 ```bash
-PYLONTECH_PORT=/dev/ttyUSB1 sh install.sh
+# from a checkout of this branch on your PC
+ssh root@<cerbo-ip> 'mkdir -p /data/pylontech/app/pylontech_remote'
+scp pylontech_live.py root@<cerbo-ip>:/data/pylontech/app/
+scp pylontech_remote/*.py root@<cerbo-ip>:/data/pylontech/app/pylontech_remote/
+
+# test on the Cerbo: one full read, prints one JSON line
+ssh root@<cerbo-ip> 'python3 /data/pylontech/app/pylontech_live.py --once'
 ```
 
-### Import the dashboard
+Then in Node-RED: delete an older **Battery** tab if present → Menu → **Import**
+`nodered/pylontech_flow.json` → **Deploy** (choose *Modified Flows* so other flows are not
+restarted) → open `http://<cerbo-ip>:1880/dashboard/battery` and switch **Live** on.
 
-1. Open Node-RED: `http://<cerbo-ip>:1880`
-2. Menu → **Import** → paste/upload `nodered/pylontech_flow.json` → **Import** → **Deploy**.
-3. Dashboard: `http://<cerbo-ip>:1880/dashboard/battery`
+Every change made on a Cerbo for this project is listed with its undo in
+[CHANGES-ON-CERBO.md](CHANGES-ON-CERBO.md).
 
-The flow ships its own dashboard page/group, so it won't collide with an existing dashboard.
+### Legacy `install.sh` / `pylontech_reader.py`
+
+The original one-shot reader and installer are still in the repo. Known limits: the installer
+only detects FTDI adapters, writes a `99-…` rule that `serial-starter.rules` overrides, restarts
+serial-starter and may run `opkg`/`pip`. Use the manual steps above instead; a new installer is
+planned.
 
 ---
 
-## Configuration
+## Dashboard
 
-| What | How |
-|------|-----|
-| Serial port | env `PYLONTECH_PORT` (default `/dev/ttyUSB0`). Set it in the Node-RED **exec** node command if needed: `PYLONTECH_PORT=/dev/ttyUSB1 python3 /data/pylontech_reader.py` |
-| Baud | env `PYLONTECH_BAUD` (default `115200`) |
-| Poll interval | the **inject** node in the flow (default 120 s) |
-| Module capacities | `NOMINAL_AH` map in `pylontech_reader.py` (unknown models default to 74 Ah) |
+- **Live** switch: starts `pylontech_live.py`, which keeps the port open and every **8 s** reads
+  the stack summary (`pwr`) and the cells of every module (`bat N`) — the whole page updates at
+  once. Model, serial, firmware, SOH, cycles and thresholds are read when Live starts, SOH and
+  cycles again every 10 min. Live switches itself off after **30 min** and frees the port.
+- Pack summary: SOC, current, temperature, capacity (Ah + kWh), SOH, total cell spread.
+- Per module: model, serial, firmware, SOC, current, temperature, capacity, SOH (`bms`/`est`),
+  cycles, Bat-HV alarm count, age of the cell data.
+- 15-cell colour bar using the battery's own thresholds from `config`.
 
-> The parsed result is stored in `global.pylontech_bms` **in memory** (not the `file` store) —
-> reading every ~2 min, persistence would wear the Cerbo flash for no benefit.
-
----
-
-## How the reader works
-
-One serial session per poll:
-
-```
-\n              wake the console, wait for the ">" prompt
-bat 1..9        per-cell voltage / current / temp / SOC% / coulombs (stops at "Invalid")
-config          BMS protection thresholds (once — same for all modules)
-info N          model (Device name), barcode, firmware
-stat N          SOH, SOC (Pwr Percent), cycles, Dsg Cap, Bat HV Times, LV Cnt
-```
-
-Timing matters: 1.2–2.0 s between commands (slave modules answer over RS485), serial timeout
-0.5 s, paging prompts (`[enter]`, `--more--`, `continued`) are answered automatically. A full
-read of 6 modules takes ~60–90 s.
-
-### SOH
-
-1. **BMS-native** (`stat N` → `SOH`) if it reports > 0.
-2. **Coulomb estimate** fallback (per-cell): `full_ah = min(coul_mah / (soc/100)) / 1000`,
-   `soh = full_ah / nominal × 100`. The per-cell method avoids the underestimate you get from
-   `min(coulombs) / avg_soc`.
-
-Pack SOH is the capacity-weighted average of module SOH (not `cap_ah/nominal`, which is SOC).
-
-### JSON output (`global.pylontech_bms`)
-
-```json
-{
-  "ok": true, "ts": 1234567890, "n_modules": 6, "total_spread_mv": 12,
-  "thresholds": { "bov_mv": 3650, "bhv_mv": 3600, "blv_mv": 3050,
-                  "buv_mv": 2800, "bal_start_mv": 3360, "bal_delta_mv": 5 },
-  "pack": { "curr_a": -12.3, "cap_ah": 198.4, "nominal_ah": 470, "soc_pct": 72,
-            "soh_pct": 91, "min_v_mv": 3301, "max_v_mv": 3318, "avg_temp_c": 24.1,
-            "energy_kwh": 9.52, "nominal_kwh": 22.56 },
-  "modules": [ {
-    "id": 1, "model": "US5000", "barcode": "...", "fw": "B69.16", "n_cells": 15,
-    "curr_a": -2.1, "min_v_mv": 3301, "max_v_mv": 3318, "spread_mv": 17,
-    "avg_temp_c": 24.1, "soc_pct": 72, "cap_ah": 33.2, "soh_pct": 95,
-    "soh_source": "bms", "cycles": null, "bat_hv_times": 0,
-    "cells": [ { "cell": 1, "v_mv": 3312, "temp_c": 24.1, "soc_pct": 72,
-                 "coul_mah": 23904, "bal": false } ]
-  } ]
-}
-```
+Command-line options (`python3 pylontech_live.py --help`): `--port` (or env `PYLONTECH_PORT`,
+default `/dev/ttyUSB0`), `--interval`, `--gap` (minimum pause between commands, default 1.2 s),
+`--max-minutes`, `--once`.
 
 ---
 
-## Dashboard widget
+## Repository
 
-- Pack summary: SOC, current, temperature, capacity (Ah + kWh), SOH, total spread (mV).
-- Per module: model, barcode, fw, SOC, current, temp, capacity, SOH (`bms`/`est`), cycles,
-  Bat-HV alarm count.
-- 15-cell colour bar using the **absolute** thresholds from `bms.thresholds`
-  (green normal, amber near-alarm, red ≥ BHV / ≤ BLV).
+```
+pylontech_live.py         realtime reader (JSON lines on stdout)
+pylontech_remote/         allow-list, console session, parsers, stack state
+nodered/                  Node-RED flow (Dashboard 2.0)
+tests/                    unit tests + captured console replies (python -m unittest discover -s tests -t .)
+tools/console_capture.py  research tool: saves raw console replies (allow-listed commands only)
+docs/CONSOLE-NOTES.md     what the console does: commands, record formats, BatteryView export
+ARCHITECTURE.md           design of the full service (archive, sync, export, maintenance)
+CHANGES-ON-CERBO.md       log of every change made on the Cerbo
+install.sh, pylontech_reader.py, udev/   legacy, from the original project
+```
 
 ---
 
 ## Troubleshooting
 
-**Port busy / no reply after reboot**
+**`port_open: … held by pid …` / Live does not start** — something else has the port:
 ```bash
-fuser /dev/ttyUSB0                 # who holds the port
-svc -d /service/serial-starter
-kill -9 $(fuser /dev/ttyUSB0) 2>/dev/null
-svc -u /service/serial-starter
+fuser /dev/ttyUSB0                                         # who holds it
+udevadm info -q property -n /dev/ttyUSB0 | grep VE_SERVICE   # must be "ignore"
 ```
+If `VE_SERVICE` is not `ignore`, the udev rule is missing (e.g. after a Venus OS update) or the
+cable is in a different USB socket than the rule expects.
 
-**Battery returns nothing** — verify the port is free and DTR/RTS off:
-```bash
-python3 - << 'EOF'
-import serial, time
-s = serial.Serial('/dev/ttyUSB0', 115200, timeout=0.5, xonxoff=False, rtscts=False, dsrdtr=False)
-s.dtr = False; s.rts = False; time.sleep(1.0); s.write(b'\n')
-buf=b''; t0=time.time()
-while time.time()-t0 < 5:
-    c=s.read(256); buf+=c
-    if b'>' in buf: break
-print(repr(buf)); s.close()
-EOF
-```
-Expect something like `b'\n\rpylon_debug>'`. Empty → udev rule / `fuser` issue.
-
-**`VE_SERVICE` not `ignore`** — the udev rule didn't apply:
-```bash
-udevadm info -q property -n /dev/ttyUSB0 | grep VE_SERVICE
-# re-apply:
-cp /data/etc/udev/rules.d/99-pylontech-ftdi.rules /etc/udev/rules.d/
-udevadm control --reload-rules && udevadm trigger --name-match=ttyUSB0
-svc -d /service/serial-starter && sleep 1 && svc -u /service/serial-starter
-```
-
-**After a Venus OS update** — the rule in `/etc` may be gone (the `/data` copy persists):
-re-run `sh install.sh`, or copy the rule from `/data/etc/udev/rules.d/` back to `/etc/...`.
+**Battery returns nothing** — check DTR/RTS (must be off), the cable is in the **Console** socket of
+the master, and nothing else holds the port. `python3 pylontech_live.py --once` prints the error.
 
 ---
 
-## Support
+## Credits
 
-I build and maintain these tools in my spare time for the Victron / DIY-solar community.
-If this saved you time, a coffee keeps it going:
-
-[![Ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/tejnoo)  →  **[ko-fi.com/tejnoo](https://ko-fi.com/tejnoo)**
-
-I'm also happy to **set it up on your system** or build custom tweaks (paid) — open an issue
-or reach out via Ko-fi.
-
----
+Original project **pylontech-rs232-venus** by **Martin (tejno)** — reader, installer and the
+dashboard widget this branch builds on. If it saved you time, support him:
+[![Ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/tejnoo) → **[ko-fi.com/tejnoo](https://ko-fi.com/tejnoo)**
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT — see [LICENSE](LICENSE) (copyright Martin (tejno); changes in this fork under the same license).
 
 Not affiliated with Pylontech or Victron Energy. Use at your own risk; reading the console is
 passive but you are responsible for your own battery system.
