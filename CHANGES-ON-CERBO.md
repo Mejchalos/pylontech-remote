@@ -10,6 +10,7 @@ Files under `/data/pylontech*` belong to the project; everything else is listed 
 | 3 | 2026-10-15 | Dashboard 2.0 `@flowfuse/node-red-dashboard` 1.33.0 installed via the Node-RED palette manager (done by the user). Runs next to the existing Dashboard 1 (`/ui`); Dashboard 2.0 is at `/dashboard`. ~200 MB in `/data`. | `/data/home/nodered/.node-red/node_modules/@flowfuse/`, `package.json` | Node-RED → Manage palette → Installed → `@flowfuse/node-red-dashboard` → Remove (only after deleting the Battery tab) |
 | 4 | 2026-10-15 | `nodered/pylontech_flow.json` imported and deployed as tab **Battery** (done by the user). Dashboard: `http://<cerbo-ip>:1880/dashboard/battery`. | `/data/home/nodered/.node-red/flows.json` | Node-RED editor → delete the Battery tab and its `ui-base`/`ui-page`/`ui-group`/`ui-theme` config nodes → Deploy |
 | 5 | 2026-10-15 | Research capture tool (read-only allow-list) and its raw captures (~0.4 MB). | `/data/pylontech-tools/console_capture.py`, `/data/pylontech-captures/` | `rm -r /data/pylontech-tools /data/pylontech-captures` |
+| 6 | 2026-10-15 | Live reader (first part of the new service): `pylontech_live.py` + package `pylontech_remote/` from this repo. Started/stopped by the Node-RED Live switch (runs as user `nodered`); holds the port only while Live is on. | `/data/pylontech/app/` | `rm -r /data/pylontech` (switch Live off first) |
 
 ## Notes
 
