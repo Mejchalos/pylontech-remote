@@ -11,6 +11,7 @@ Files under `/data/pylontech*` belong to the project; everything else is listed 
 | 4 | 2026-10-15 | `nodered/pylontech_flow.json` imported and deployed as tab **Battery** (done by the user). Dashboard: `http://<cerbo-ip>:1880/dashboard/battery`. | `/data/home/nodered/.node-red/flows.json` | Node-RED editor → delete the Battery tab and its `ui-base`/`ui-page`/`ui-group`/`ui-theme` config nodes → Deploy |
 | 5 | 2026-10-15 | Research capture tool (read-only allow-list) and its raw captures (~0.4 MB). | `/data/pylontech-tools/console_capture.py`, `/data/pylontech-captures/` | `rm -r /data/pylontech-tools /data/pylontech-captures` |
 | 6 | 2026-10-15 | Live reader (first part of the new service): `pylontech_live.py` + package `pylontech_remote/` from this repo. Started/stopped by the Node-RED Live switch (runs as user `nodered`); holds the port only while Live is on. | `/data/pylontech/app/` | `rm -r /data/pylontech` (switch Live off first) |
+| 7 | 2026-10-15 | State directory owned by `nodered`: the live reader keeps model/serial/firmware/thresholds and the `stat` counters in `static.json` (~13 KB) so the dashboard is complete from the first update. Rewritten only when something changed, at most once per counter refresh (every 10 min while Live is on). | `/data/pylontech/state/` | `rm -r /data/pylontech/state` (next Live start reads everything again) |
 
 ## Notes
 

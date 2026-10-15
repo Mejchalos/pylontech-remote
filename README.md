@@ -89,7 +89,7 @@ Node-RED with **Dashboard 2.0** (`@flowfuse/node-red-dashboard`, install from th
 
 ```bash
 # from a checkout of this branch on your PC
-ssh root@<cerbo-ip> 'mkdir -p /data/pylontech/app/pylontech_remote'
+ssh root@<cerbo-ip> 'mkdir -p /data/pylontech/app/pylontech_remote /data/pylontech/state && chown nodered:nodered /data/pylontech/state'
 scp pylontech_live.py root@<cerbo-ip>:/data/pylontech/app/
 scp pylontech_remote/*.py root@<cerbo-ip>:/data/pylontech/app/pylontech_remote/
 
@@ -117,8 +117,19 @@ planned.
 
 - **Live** switch: starts `pylontech_live.py`, which keeps the port open and every **8 s** reads
   the stack summary (`pwr`) and the cells of every module (`bat N`) — the whole page updates at
-  once. Model, serial, firmware, SOH, cycles and thresholds are read when Live starts, SOH and
-  cycles again every 10 min. Live switches itself off after **30 min** and frees the port.
+  once. Model, serial, firmware, SOH, cycles and thresholds are kept in
+  `/data/pylontech/state/static.json` (written only when a value changes), so the page is
+  complete from the first update (~9 s after switching on; ~25 s the very first time) and these
+  values are refreshed in the background. Live switches itself off after **30 min** and frees
+  the port.
+- **Click a module's header** to open its lifetime counters (`stat N`, ~120 values) in four
+  groups: alarms & protections (non-zero ones highlighted), operation, time spent in current /
+  SOC / temperature ranges (shown in hours/days), stored records. Zero values are hidden unless
+  switched on. They are read when Live starts and every 10 min, and kept in the state file so
+  they show at once.
+- **BHV counter increases**: the per-module Bat-HV number is the battery's lifetime counter. The
+  list below the modules only records increases that happen while the dashboard is watching
+  (time = when it was noticed); the real alarm times are in the battery's event records.
 - Pack summary: SOC, current, temperature, capacity (Ah + kWh), SOH, total cell spread.
 - Per module: model, serial, firmware, SOC, current, temperature, capacity, SOH (`bms`/`est`),
   cycles, Bat-HV alarm count, age of the cell data.
@@ -126,7 +137,7 @@ planned.
 
 Command-line options (`python3 pylontech_live.py --help`): `--port` (or env `PYLONTECH_PORT`,
 default `/dev/ttyUSB0`), `--interval`, `--gap` (minimum pause between commands, default 1.2 s),
-`--max-minutes`, `--once`.
+`--max-minutes`, `--once`, `--state-file` (`''` = keep nothing).
 
 ---
 
