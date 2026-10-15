@@ -1,0 +1,197 @@
+log
+@
+ Index   : 31    
+ Time    : 26-10-15 17:19:43
+ ModID   : BMM
+ Code    : 0
+ Info    : The device start discharging. 
+
+ Index   : 30    
+ Time    : 26-10-15 17:19:17
+ ModID   : BMM
+ Code    : 488
+ Info    : The device start charging. 
+
+ Index   : 29    
+ Time    : 26-10-15 17:18:43
+ ModID   : BMM
+ Code    : 0
+ Info    : The device start discharging. 
+Press [Enter] to be continued,other key to exit                                                  
+ Index   : 28    
+ Time    : 26-10-15 17:18:25
+ ModID   : BMM
+ Code    : 487
+ Info    : The device start charging. 
+
+ Index   : 27    
+ Time    : 26-10-15 17:17:45
+ ModID   : BMM
+ Code    : 486
+ Info    : The device start charging. 
+
+ Index   : 26    
+ Time    : 26-10-15 17:17:23
+ ModID   : BMM
+ Code    : 485
+ Info    : The device start charging. 
+Press [Enter] to be continued,other key to exit                                                  
+ Index   : 25    
+ Time    : 26-10-15 17:16:10
+ ModID   : BMM
+ Code    : 0
+ Info    : The device start discharging. 
+
+ Index   : 24    
+ Time    : 26-10-15 17:14:32
+ ModID   : BMM
+ Code    : 484
+ Info    : The device start charging. 
+
+ Index   : 23    
+ Time    : 26-10-15 17:14:06
+ ModID   : BMM
+ Code    : 0
+ Info    : The device start discharging. 
+Press [Enter] to be continued,other key to exit                                                  
+ Index   : 22    
+ Time    : 26-10-15 17:13:30
+ ModID   : BMM
+ Code    : 483
+ Info    : The device start charging. 
+
+ Index   : 21    
+ Time    : 26-10-15 17:11:44
+ ModID   : BMM
+ Code    : 0
+ Info    : The device start discharging. 
+
+ Index   : 20    
+ Time    : 26-10-15 17:11:40
+ ModID   : BMM
+ Code    : 0
+ Info    : The device start discharging. 
+Press [Enter] to be continued,other key to exit                                                  
+ Index   : 19    
+ Time    : 26-10-15 17:11:06
+ ModID   : BMM
+ Code    : 482
+ Info    : The device start charging. 
+
+ Index   : 18    
+ Time    : 26-10-15 17:10:34
+ ModID   : BMM
+ Code    : 481
+ Info    : The device start charging. 
+
+ Index   : 17    
+ Time    : 26-10-15 17:09:32
+ ModID   : BMM
+ Code    : 0
+ Info    : The device start discharging. 
+Press [Enter] to be continued,other key to exit                                                  
+ Index   : 16    
+ Time    : 26-10-15 17:09:26
+ ModID   : BMM
+ Code    : 0
+ Info    : The device start discharging. 
+
+ Index   : 15    
+ Time    : 26-10-15 17:09:02
+ ModID   : BMM
+ Code    : 0
+ Info    : The device start discharging. 
+
+ Index   : 14    
+ Time    : 26-10-15 17:08:24
+ ModID   : BMM
+ Code    : 0
+ Info    : The device start discharging. 
+Press [Enter] to be continued,other key to exit                                                  
+ Index   : 13    
+ Time    : 26-10-15 17:05:57
+ ModID   : BMM
+ Code    : 0
+ Info    : The device start discharging. 
+
+ Index   : 12    
+ Time    : 26-10-15 17:05:15
+ ModID   : BMM
+ Code    : 480
+ Info    : The device start charging. 
+
+ Index   : 11    
+ Time    : 26-10-15 17:04:31
+ ModID   : BMM
+ Code    : 47f
+ Info    : The device start charging. 
+Press [Enter] to be continued,other key to exit                                                  
+ Index   : 10    
+ Time    : 26-10-15 17:04:25
+ ModID   : BMM
+ Code    : 0
+ Info    : The device start discharging. 
+
+ Index   : 9     
+ Time    : 26-10-15 17:04:19
+ ModID   : BMM
+ Code    : 47e
+ Info    : The device start charging. 
+
+ Index   : 8     
+ Time    : 26-10-15 17:04:17
+ ModID   : BMM
+ Code    : 0
+ Info    : The device start discharging. 
+Press [Enter] to be continued,other key to exit                                                  
+ Index   : 7     
+ Time    : 26-10-15 17:04:15
+ ModID   : BMM
+ Code    : 47d
+ Info    : The device start charging. 
+
+ Index   : 6     
+ Time    : 26-10-15 17:04:07
+ ModID   : BMM
+ Code    : 0
+ Info    : The device start discharging. 
+
+ Index   : 5     
+ Time    : 26-10-15 17:03:17
+ ModID   : BMM
+ Code    : 47c
+ Info    : The device start charging. 
+Press [Enter] to be continued,other key to exit                                                  
+ Index   : 4     
+ Time    : 26-10-15 17:02:51
+ ModID   : BMM
+ Code    : 0
+ Info    : The device start discharging. 
+
+ Index   : 3     
+ Time    : 26-10-15 17:02:25
+ ModID   : BMM
+ Code    : 47b
+ Info    : The device start charging. 
+
+ Index   : 2     
+ Time    : 26-10-15 17:02:05
+ ModID   : BMM
+ Code    : 0
+ Info    : The device start discharging. 
+Press [Enter] to be continued,other key to exit                                                  
+ Index   : 1     
+ Time    : 26-10-15 17:01:57
+ ModID   : BMM
+ Code    : 47a
+ Info    : The device start charging. 
+
+ Index   : 0     
+ Time    : 26-10-15 17:01:43
+ ModID   : BMM
+ Code    : 0
+ Info    : The device start discharging. 
+
+Command completed successfully
+$$
+pylon_debug>

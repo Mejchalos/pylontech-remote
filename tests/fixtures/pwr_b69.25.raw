@@ -1,0 +1,22 @@
+pwr
+@
+Power Volt   Curr   Tempr  Tlow   Thigh  Vlow   Vhigh  Base.St  Volt.St  Curr.St  Temp.St  Coulomb  Time                 B.V.St   B.T.St   MosTempr M.T.St  
+1     49695  -3099  23800  22500  22800  3313   3313   Dischg   Normal   Normal   Normal   77%      2026-10-15 20:29:24  Normal   Normal  22400    Normal  
+2     49697  -2783  24000  22300  22900  3312   3314   Dischg   Normal   Normal   Normal   79%      2026-10-15 20:29:24  Normal   Normal  22700    Normal  
+3     49696  -2890  23500  22100  22300  3313   3314   Dischg   Normal   Normal   Normal   75%      2026-10-15 20:29:23  Normal   Normal  22400    Normal  
+4     49698  -3064  23400  21500  21600  3311   3315   Dischg   Normal   Normal   Normal   74%      2026-10-15 20:29:24  Normal   Normal  22300    Normal  
+5     -      -      -      -      -      -      -      Absent   -        -        -        -        -                    -        -       
+6     -      -      -      -      -      -      -      Absent   -        -        -        -        -                    -        -       
+7     -      -      -      -      -      -      -      Absent   -        -        -        -        -                    -        -       
+8     -      -      -      -      -      -      -      Absent   -        -        -        -        -                    -        -       
+9     -      -      -      -      -      -      -      Absent   -        -        -        -        -                    -        -       
+10    -      -      -      -      -      -      -      Absent   -        -        -        -        -                    -        -       
+11    -      -      -      -      -      -      -      Absent   -        -        -        -        -                    -        -       
+12    -      -      -      -      -      -      -      Absent   -        -        -        -        -                    -        -       
+13    -      -      -      -      -      -      -      Absent   -        -        -        -        -                    -        -       
+14    -      -      -      -      -      -      -      Absent   -        -        -        -        -                    -        -       
+15    -      -      -      -      -      -      -      Absent   -        -        -        -        -                    -        -       
+16    -      -      -      -      -      -      -      Absent   -        -        -        -        -                    -        -       
+Command completed successfully
+$$
+pylon_debug>

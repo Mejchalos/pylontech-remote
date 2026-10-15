@@ -1,0 +1,19 @@
+info 2
+@
+Device address      : 2
+Manufacturer        : Pylon
+Device name         : US3000C
+Board version       : V10R04
+Board               : NF4.E2
+Main Soft version   : B69.25.0.0
+Soft  version       : V2.2
+Boot  version       : V1.0
+Comm version        : V2.0
+Release Date        : 24-01-01
+Barcode             : X00000000TEST0002
+
+Specification       : 48V/74AH
+Cell Number         : 15
+Command completed successfully
+$$
+pylon_debug>
