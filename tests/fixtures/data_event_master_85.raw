@@ -1,0 +1,42 @@
+data event 85
+@
+-----------------------------------------------
+Item Index      : 85
+Time            : 26-07-15 16:41:24
+Voltage         : 48685       mV
+Current         : -50739      mA
+Temperature     : 33300       mC
+Percent         : 72          %
+Total Coulomb   : 74000       mAH
+Max Voltage     : 54000       mV
+Base State      : Dischg      
+Volt. State     : Normal      
+Curr. State     : DOCAlm      
+Tempr. State    : Normal      
+Coul. Status    : Normal      
+Power Events    : 0x200000   DOCA 
+Bat Events      : 0x0        
+Bat Protect ENA : BOV BHV BLV BUV BSLP CBOT CBHT CBLT CBUT DBOT DBHT DBLT DBUT 
+Pwr Protect ENA : POV PHV PLV PUV PSLP POT PHT COC2 COC COCA DOCA DOC DOC2 SC LCOUL 
+System Fault    : 0x0 
+-----------------------------------------------
+
+Battery  Volt     Curr     Tempr    Base State   Volt. State  Curr. State  Temp. State  Coulomb     
+0        3246     -50739   31200    Dischg       Normal       Normal       Normal       72%
+1        3246     -50739   31200    Dischg       Normal       Normal       Normal       72%
+2        3245     -50739   31200    Dischg       Normal       Normal       Normal       72%
+3        3247     -50739   31200    Dischg       Normal       Normal       Normal       72%
+4        3247     -50739   31200    Dischg       Normal       Normal       Normal       72%
+5        3245     -50739   30500    Dischg       Normal       Normal       Normal       72%
+6        3246     -50739   30500    Dischg       Normal       Normal       Normal       72%
+7        3246     -50739   30500    Dischg       Normal       Normal       Normal       72%
+8        3246     -50739   30500    Dischg       Normal       Normal       Normal       72%
+9        3246     -50739   30500    Dischg       Normal       Normal       Normal       72%
+10       3245     -50739   30400    Dischg       Normal       Normal       Normal       72%
+11       3245     -50739   30400    Dischg       Normal       Normal       Normal       72%
+12       3245     -50739   30400    Dischg       Normal       Normal       Normal       72%
+13       3245     -50739   30400    Dischg       Normal       Normal       Normal       72%
+14       3245     -50739   30400    Dischg       Normal       Normal       Normal       72%
+Command completed successfully
+$$
+pylon_debug>

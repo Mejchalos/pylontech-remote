@@ -1,0 +1,42 @@
+data event 2
+@
+-----------------------------------------------
+Item Index      : 2
+Time            : 25-06-25 06:22:47
+Voltage         : 54068       mV
+Current         : 12748       mA
+Temperature     : 26600       mC
+Percent         : 100         %
+Total Coulomb   : 74000       mAH
+Max Voltage     : 54000       mV
+Base State      : Charge      
+Volt. State     : OV          
+Curr. State     : Normal      
+Tempr. State    : Normal      
+Coul. Status    : Full        
+Power Events    : 0x1        POV 
+Bat Events      : 0x2        BHV 
+Bat Protect ENA : BOV BHV BLV BUV BSLP CBOT CBHT CBLT CBUT DBOT DBHT DBLT DBUT 
+Pwr Protect ENA : POV PHV PLV PUV PSLP POT PHT COC2 COC COCA DOCA DOC DOC2 SC LCOUL 
+System Fault    : 0x0 
+-----------------------------------------------
+
+Battery  Volt     Curr     Tempr    Base State   Volt. State  Curr. State  Temp. State  Coulomb     
+0        3607     12748    26000    Charge       High         Normal       Normal       100%
+1        3588     12748    26000    Charge       Normal       Normal       Normal       100%
+2        3605     12748    26000    Charge       High         Normal       Normal       100%
+3        3620     12748    26000    Charge       High         Normal       Normal       100%
+4        3564     12748    26000    Charge       Normal       Normal       Normal       100%
+5        3621     12748    25900    Charge       High         Normal       Normal       100%
+6        3626     12748    25900    Charge       High         Normal       Normal       100%
+7        3629     12748    25900    Charge       High         Normal       Normal       100%
+8        3606     12748    25900    Charge       High         Normal       Normal       100%
+9        3622     12748    25900    Charge       High         Normal       Normal       100%
+10       3599     12748    26000    Charge       Normal       Normal       Normal       100%
+11       3593     12748    26000    Charge       Normal       Normal       Normal       100%
+12       3592     12748    26000    Charge       Normal       Normal       Normal       100%
+13       3589     12748    26000    Charge       Normal       Normal       Normal       100%
+14       3607     12748    26000    Charge       High         Normal       Normal       100%
+Command completed successfully
+$$
+pylon_debug>

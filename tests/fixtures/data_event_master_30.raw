@@ -1,0 +1,42 @@
+data event 30
+@
+-----------------------------------------------
+Item Index      : 30
+Time            : 26-01-17 01:03:51
+Voltage         : 51083       mV
+Current         : 19133       mA
+Temperature     : 19000       mC
+Percent         : 92          %
+Total Coulomb   : 74000       mAH
+Max Voltage     : 54000       mV
+Base State      : Charge      
+Volt. State     : Normal      
+Curr. State     : Normal      
+Tempr. State    : Normal      
+Coul. Status    : Normal      
+Power Events    : 0x40       
+Bat Events      : 0x0        
+Bat Protect ENA : BOV BHV BLV BUV BSLP CBOT CBHT CBLT CBUT DBOT DBHT DBLT DBUT 
+Pwr Protect ENA : POV PHV PLV PUV PSLP POT PHT COC2 COC COCA DOCA DOC DOC2 SC LCOUL 
+System Fault    : 0x0 
+-----------------------------------------------
+
+Battery  Volt     Curr     Tempr    Base State   Volt. State  Curr. State  Temp. State  Coulomb     
+0        3407     19133    22800    Charge       Normal       Normal       Normal       94%
+1        3406     19133    22800    Charge       Normal       Normal       Normal       94%
+2        3406     19133    22800    Charge       Normal       Normal       Normal       94%
+3        3406     19133    22800    Charge       Normal       Normal       Normal       93%
+4        3411     19133    22800    Charge       Normal       Normal       Normal       94%
+5        3404     19133    23100    Charge       Normal       Normal       Normal       93%
+6        3400     19133    23100    Charge       Normal       Normal       Normal       92%
+7        3401     19133    23100    Charge       Normal       Normal       Normal       92%
+8        3405     19133    23100    Charge       Normal       Normal       Normal       93%
+9        3406     19133    23100    Charge       Normal       Normal       Normal       93%
+10       3406     19133    23000    Charge       Normal       Normal       Normal       94%
+11       3405     19133    23000    Charge       Normal       Normal       Normal       94%
+12       3406     19133    23000    Charge       Normal       Normal       Normal       94%
+13       3406     19133    23000    Charge       Normal       Normal       Normal       94%
+14       3408     19133    23000    Charge       Normal       Normal       Normal       94%
+Command completed successfully
+$$
+pylon_debug>

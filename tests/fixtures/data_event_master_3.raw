@@ -1,0 +1,42 @@
+data event 3
+@
+-----------------------------------------------
+Item Index      : 3
+Time            : 25-06-25 11:21:46
+Voltage         : 46052       mV
+Current         : -14903      mA
+Temperature     : 30400       mC
+Percent         : 4           %
+Total Coulomb   : 74000       mAH
+Max Voltage     : 54000       mV
+Base State      : Dischg      
+Volt. State     : Normal      
+Curr. State     : Normal      
+Tempr. State    : Normal      
+Coul. Status    : Low         
+Power Events    : 0x0        
+Bat Events      : 0x8        BLV 
+Bat Protect ENA : BOV BHV BLV BUV BSLP CBOT CBHT CBLT CBUT DBOT DBHT DBLT DBUT 
+Pwr Protect ENA : POV PHV PLV PUV PSLP POT PHT COC2 COC COCA DOCA DOC DOC2 SC LCOUL 
+System Fault    : 0x0 
+-----------------------------------------------
+
+Battery  Volt     Curr     Tempr    Base State   Volt. State  Curr. State  Temp. State  Coulomb     
+0        3064     -14903   31100    Dischg       Normal       Normal       Normal       4%
+1        3076     -14903   31100    Dischg       Normal       Normal       Normal       4%
+2        3074     -14903   31100    Dischg       Normal       Normal       Normal       4%
+3        3077     -14903   31100    Dischg       Normal       Normal       Normal       4%
+4        3082     -14903   31100    Dischg       Normal       Normal       Normal       5%
+5        3066     -14903   31100    Dischg       Normal       Normal       Normal       4%
+6        3050     -14903   31100    Dischg       Low          Normal       Normal       4%
+7        3065     -14903   31100    Dischg       Normal       Normal       Normal       4%
+8        3067     -14903   31100    Dischg       Normal       Normal       Normal       4%
+9        3071     -14903   31100    Dischg       Normal       Normal       Normal       4%
+10       3070     -14903   31000    Dischg       Normal       Normal       Normal       4%
+11       3068     -14903   31000    Dischg       Normal       Normal       Normal       4%
+12       3076     -14903   31000    Dischg       Normal       Normal       Normal       4%
+13       3075     -14903   31000    Dischg       Normal       Normal       Normal       4%
+14       3071     -14903   31000    Dischg       Normal       Normal       Normal       4%
+Command completed successfully
+$$
+pylon_debug>

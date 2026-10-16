@@ -1,0 +1,42 @@
+data 2 event 0
+@
+-----------------------------------------------
+Item Index      : 0
+Time            : 25-04-26 19:30:38
+Voltage         : 52231       mV
+Current         : 0           mA
+Temperature     : 23000       mC
+Percent         : 97          %
+Total Coulomb   : 74000       mAH
+Max Voltage     : 54000       mV
+Base State      : SysError    
+Volt. State     : Normal      
+Curr. State     : Normal      
+Tempr. State    : Normal      
+Coul. Status    : Normal      
+Power Events    : 0x10000000 SYSERR 
+Bat Events      : 0x0        
+Bat Protect ENA : BOV BHV BLV BUV BSLP CBOT CBHT CBLT CBUT DBOT DBHT DBLT DBUT 
+Pwr Protect ENA : POV PHV PLV PUV PSLP POT PHT COC2 COC COCA DOCA DOC DOC2 SC LCOUL 
+System Fault    : 0x200 
+-----------------------------------------------
+
+Battery  Volt     Curr     Tempr    Base State   Volt. State  Curr. State  Temp. State  Coulomb     
+0        3482     0        20900    Idle         Normal       Normal       Normal       98%
+1        3486     0        20900    Idle         Normal       Normal       Normal       98%
+2        3490     0        20900    Idle         Normal       Normal       Normal       99%
+3        3479     0        20900    Idle         Normal       Normal       Normal       97%
+4        3488     0        20900    Idle         Normal       Normal       Normal       99%
+5        3491     0        20700    Idle         Normal       Normal       Normal       99%
+6        3479     0        20700    Idle         Normal       Normal       Normal       97%
+7        3462     0        20700    Idle         Normal       Normal       Normal       98%
+8        3479     0        20700    Idle         Normal       Normal       Normal       97%
+9        3478     0        20700    Idle         Normal       Normal       Normal       97%
+10       3483     0        20400    Idle         Normal       Normal       Normal       98%
+11       3485     0        20400    Idle         Normal       Normal       Normal       98%
+12       3471     0        20400    Idle         Normal       Normal       Normal       100%
+13       3490     0        20400    Idle         Normal       Normal       Normal       99%
+14       3488     0        20400    Idle         Normal       Normal       Normal       99%
+Command completed successfully
+$$
+pylon_debug>

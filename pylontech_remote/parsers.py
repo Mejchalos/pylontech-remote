@@ -209,6 +209,87 @@ def parse_bat(text):
     return cells
 
 
+def _event_names(value):
+    """'0x2        PHV ' -> ('0x2', ['PHV'])"""
+    parts = (value or '').split()
+    if not parts:
+        return None, []
+    return parts[0], parts[1:]
+
+
+def parse_data_record(text):
+    """One history or event record (`data [N] history|event I`)."""
+    kv = parse_kv(text)
+    get = lambda label: _first(kv, label)
+    num = lambda label: to_int((get(label) or '').split()[0]) if get(label) else None
+    index = num('Rec Item Index')
+    if index is None:
+        index = num('Item Index')
+    pwr_hex, pwr_names = _event_names(get('Power Events'))
+    bat_hex, bat_names = _event_names(get('Bat Events'))
+    _, cell_rows = parse_table(text, 'Battery')
+    cells = [{
+        'cell':      to_int(r.get('Battery')),
+        'v_mv':      to_int(r.get('Volt')),
+        'curr_ma':   to_int(r.get('Curr')),
+        'temp_mc':   to_int(r.get('Tempr')),
+        'state':     r.get('Base State'),
+        'soc_pct':   to_int(r.get('Coulomb')),
+    } for r in cell_rows]
+    return {
+        'index':        index,
+        'time':         get('Time'),
+        'voltage_mv':   num('Voltage'),
+        'current_ma':   num('Current'),
+        'temp_mc':      num('Temperature'),
+        'percent':      num('Percent'),
+        'base_state':   get('Base State'),
+        'volt_state':   get('Volt. State'),
+        'curr_state':   get('Curr. State'),
+        'temp_state':   get('Tempr. State'),
+        'coul_status':  get('Coul. Status'),
+        'power_events': pwr_hex,
+        'bat_events':   bat_hex,
+        'event_names':  pwr_names + bat_names,
+        'system_fault': (get('System Fault') or '').split()[0] if get('System Fault') else None,
+        'cells':        cells,
+    }
+
+
+def is_complete(text):
+    """A command reply that ran to its normal end."""
+    return 'Command completed successfully' in text and text.rstrip().endswith('>')
+
+
+def is_record_reply(text, index, n_cells=None):
+    """`data … event|history <index>` answered completely with that very record.
+
+    After the master cut a slave's answer short it sends the rest with the reply to the *next*
+    command, so "Command completed" alone is not enough: the record must be the one asked for,
+    with its time and the whole cell table."""
+    if not is_complete(text):
+        return False
+    rec = parse_data_record(text)
+    if rec['index'] != index or not rec['time'] or not rec['cells']:
+        return False
+    numbers = [c['cell'] for c in rec['cells']]
+    if numbers != list(range(len(numbers))):
+        return False
+    return n_cells is None or len(numbers) == n_cells
+
+
+def is_reply_to(text, command):
+    """The reply starts with the echo of `command` and ran to its normal end."""
+    return is_complete(text) and text.lstrip('\r\n').startswith(command)
+
+
+def is_refusal(text, command):
+    """The battery answered `command` with "Invalid command…" or "Target device is not present"
+    (e.g. an index past the end, or a module that does not exist)."""
+    return (text.lstrip('\r\n').startswith(command) and text.rstrip().endswith('>')
+            and (is_invalid(text) or is_absent(text)))
+
+
 def is_absent(text):
     return 'Target device is not present' in text
 

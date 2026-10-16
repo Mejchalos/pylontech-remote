@@ -1,0 +1,42 @@
+data event 0
+@
+-----------------------------------------------
+Item Index      : 0
+Time            : 25-06-25 06:22:43
+Voltage         : 53698       mV
+Current         : 14909       mA
+Temperature     : 26600       mC
+Percent         : 100         %
+Total Coulomb   : 74000       mAH
+Max Voltage     : 54000       mV
+Base State      : Charge      
+Volt. State     : Normal      
+Curr. State     : Normal      
+Tempr. State    : Normal      
+Coul. Status    : Full        
+Power Events    : 0x0        
+Bat Events      : 0x2        BHV 
+Bat Protect ENA : BOV BHV BLV BUV BSLP CBOT CBHT CBLT CBUT DBOT DBHT DBLT DBUT 
+Pwr Protect ENA : POV PHV PLV PUV PSLP POT PHT COC2 COC COCA DOCA DOC DOC2 SC LCOUL 
+System Fault    : 0x0 
+-----------------------------------------------
+
+Battery  Volt     Curr     Tempr    Base State   Volt. State  Curr. State  Temp. State  Coulomb     
+0        3583     14909    26000    Charge       Normal       Normal       Normal       100%
+1        3565     14909    26000    Charge       Normal       Normal       Normal       100%
+2        3581     14909    26000    Charge       Normal       Normal       Normal       100%
+3        3593     14909    26000    Charge       Normal       Normal       Normal       100%
+4        3544     14909    26000    Charge       Normal       Normal       Normal       100%
+5        3594     14909    25900    Charge       Normal       Normal       Normal       100%
+6        3598     14909    25900    Charge       Normal       Normal       Normal       100%
+7        3601     14909    25900    Charge       High         Normal       Normal       100%
+8        3582     14909    25900    Charge       Normal       Normal       Normal       100%
+9        3595     14909    25900    Charge       Normal       Normal       Normal       100%
+10       3575     14909    26000    Charge       Normal       Normal       Normal       100%
+11       3570     14909    26000    Charge       Normal       Normal       Normal       100%
+12       3569     14909    26000    Charge       Normal       Normal       Normal       100%
+13       3566     14909    26000    Charge       Normal       Normal       Normal       100%
+14       3582     14909    26000    Charge       Normal       Normal       Normal       100%
+Command completed successfully
+$$
+pylon_debug>

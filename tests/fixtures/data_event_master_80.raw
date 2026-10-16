@@ -1,0 +1,42 @@
+data event 80
+@
+-----------------------------------------------
+Item Index      : 80
+Time            : 26-03-05 15:38:04
+Voltage         : 52085       mV
+Current         : 6219        mA
+Temperature     : 21400       mC
+Percent         : 96          %
+Total Coulomb   : 74000       mAH
+Max Voltage     : 54000       mV
+Base State      : Charge      
+Volt. State     : Normal      
+Curr. State     : Normal      
+Tempr. State    : Normal      
+Coul. Status    : Normal      
+Power Events    : 0x40       
+Bat Events      : 0x0        
+Bat Protect ENA : BOV BHV BLV BUV BSLP CBOT CBHT CBLT CBUT DBOT DBHT DBLT DBUT 
+Pwr Protect ENA : POV PHV PLV PUV PSLP POT PHT COC2 COC COCA DOCA DOC DOC2 SC LCOUL 
+System Fault    : 0x0 
+-----------------------------------------------
+
+Battery  Volt     Curr     Tempr    Base State   Volt. State  Curr. State  Temp. State  Coulomb     
+0        3477     6219     20300    Charge       Normal       Normal       Normal       97%
+1        3484     6219     20300    Charge       Normal       Normal       Normal       98%
+2        3478     6219     20300    Charge       Normal       Normal       Normal       97%
+3        3474     6219     20300    Charge       Normal       Normal       Normal       97%
+4        3488     6219     20300    Charge       Normal       Normal       Normal       98%
+5        3461     6219     20500    Charge       Normal       Normal       Normal       97%
+6        3448     6219     20500    Charge       Normal       Normal       Normal       96%
+7        3444     6219     20500    Charge       Normal       Normal       Normal       96%
+8        3478     6219     20500    Charge       Normal       Normal       Normal       97%
+9        3464     6219     20500    Charge       Normal       Normal       Normal       97%
+10       3476     6219     20400    Charge       Normal       Normal       Normal       97%
+11       3480     6219     20400    Charge       Normal       Normal       Normal       97%
+12       3478     6219     20400    Charge       Normal       Normal       Normal       97%
+13       3481     6219     20400    Charge       Normal       Normal       Normal       97%
+14       3474     6219     20400    Charge       Normal       Normal       Normal       97%
+Command completed successfully
+$$
+pylon_debug>
