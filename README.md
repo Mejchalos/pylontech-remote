@@ -93,7 +93,7 @@ To remove: delete the **Battery** tab in Node-RED, `rm -r /data/pylontech` and t
 
 ## Logs for a warranty claim
 
-Dashboard button **Logy pro reklamaci** (or `python3 pylontech_export.py` on the Cerbo) reads
+Dashboard button **Export events and history logs** (or `python3 pylontech_export.py` on the Cerbo) reads
 the event and history logs of every module through the master's console and builds one ZIP in
 `/data/pylontech/exports/` (last 5 kept), downloadable from the dashboard:
 
@@ -115,8 +115,9 @@ battery drops from its ring buffer during the run are handled. Details:
 
 ## Dashboard
 
-- **Live** switch: reads the stack summary (`pwr`) and the cells of every module (`bat N`) every
-  **8 s**; the whole page updates at once. Model, serial, firmware, SOH, cycles and thresholds are
+- **Start Live** / **Stop Live** buttons (the active one is filled): Live reads the stack
+  summary (`pwr`) and the cells of every module (`bat N`) every **8 s**; the whole page updates
+  at once. Model, serial, firmware, SOH, cycles and thresholds are
   kept in `/data/pylontech/state/static.json`, so the page is complete from the first update.
   Live switches itself off after **30 min** and frees the port.
 - **Click a module's header** to open its lifetime counters (`stat N`, ~120 values): alarms and
