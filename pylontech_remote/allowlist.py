@@ -11,7 +11,7 @@ MODULE = r'[1-9][0-9]?'
 ALLOWED = (
     r'',                                            # bare Enter: wake / resync
     r'help( [a-z]+)?',
-    r'pwr',
+    r'pwr( ' + MODULE + r')?',
     r'config',
     r'info( ' + MODULE + r')?',
     r'bat ' + MODULE,

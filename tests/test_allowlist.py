@@ -3,7 +3,7 @@ import unittest
 from pylontech_remote import allowlist
 
 ALLOWED = [
-    '', 'help', 'help data', 'pwr', 'config', 'info', 'info 2', 'bat 1', 'bat 16', 'stat', 'stat 4',
+    '', 'help', 'help data', 'pwr', 'pwr 4', 'config', 'info', 'info 2', 'bat 1', 'bat 16', 'stat', 'stat 4',
     'data event 0', 'data history 1795', 'data 2 event 0', 'data 4 history 1200',
     'datalist event 0', 'datalist history 1790', 'log',
 ]

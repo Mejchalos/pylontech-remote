@@ -64,5 +64,16 @@ class RealPagingTest(unittest.TestCase):
         self.assertIn('Index   : 0', r.text)
 
 
+class TruncatedReplyTest(unittest.TestCase):
+    def test_prompt_right_after_truncated_text_ends_the_reply(self):
+        cut = b'data 4 history 1790\n\r@\r\r\nBat Events      : 0x0        pylon_debug>'
+        s, _, clock = make(replies={'data 4 history 1790': cut})
+        t0 = clock.t
+        r = s.command('data 4 history 1790', idle=8.0)
+        self.assertEqual(r.end_reason, 'prompt')       # no 8 s wait
+        self.assertLess(clock.t - t0, 2.0)
+        self.assertNotIn('Command completed successfully', r.text)
+
+
 if __name__ == '__main__':
     unittest.main()

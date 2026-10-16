@@ -28,7 +28,7 @@ import serial
 # Read-only commands. Extend only after checking `help` and getting approval.
 ALLOWED = [
     r'help( [a-z]+)?',
-    r'pwr',
+    r'pwr( [1-9][0-9]?)?',
     r'config',
     r'info( [1-9])?',
     r'bat [1-9]',

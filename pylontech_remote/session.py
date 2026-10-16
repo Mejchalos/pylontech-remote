@@ -13,7 +13,9 @@ import time
 
 from . import allowlist
 
-PROMPT_RE = re.compile(rb'(^|[\r\n])[A-Za-z_]+>\s*$')
+# The prompt at the very end of the buffer. Normally on its own line; after a reply the master
+# cut short (a slave's answer not fully relayed) it follows the truncated text directly.
+PROMPT_RE = re.compile(rb'((^|[\r\n])[A-Za-z_]+|pylon[A-Za-z_]*)>\s*$')
 PAGING = b'press [enter]'
 ENTER = b'\r'
 
@@ -149,6 +151,22 @@ class ConsoleSession(object):
         t1 = self._clock()
         self._last_end = t1
         return RawReply(command, sent_utc, round(t1 - t0, 3), data, reason, pages, stale)
+
+    def drain(self, quiet=1.0, limit=15.0):
+        """Read and discard until the line has been silent for `quiet` seconds (rest of an
+        interrupted reply). Returns the discarded bytes."""
+        if self._ser is None:
+            return b''
+        buf = b''
+        t0 = last = self._clock()
+        while True:
+            chunk = self._ser.read(4096)
+            now = self._clock()
+            if chunk:
+                buf += chunk
+                last = now
+            elif now - last >= quiet or now - t0 >= limit:
+                return buf
 
     def _wait_gap(self):
         if self._last_end is None:
