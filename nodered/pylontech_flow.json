@@ -93,7 +93,7 @@
     "z": "batt-tab-01",
     "group": "pylon-bms-group-01",
     "name": "BMS Per-Module Widget",
-    "order": 3,
+    "order": 6,
     "width": 6,
     "height": 16,
     "head": "",
@@ -138,7 +138,7 @@
     "y": 100,
     "wires": [
       [
-        "pylon-live-ctrl"
+        "pylon-port-ctrl"
       ]
     ]
   },
@@ -167,32 +167,6 @@
     "wires": []
   },
   {
-    "id": "pylon-live-ctrl",
-    "type": "function",
-    "z": "batt-tab-01",
-    "name": "Live controller",
-    "func": "// Starts / stops the live reader (pylontech_live.py) from the Live switch.\n// Inputs: msg.topic 'live' (switch true/false) or the exec node's return code (process ended).\n// Outputs: 1 exec (start / kill), 2 status text, 3 switch state.\nconst running = context.get('running') === true;\nconst st = (t) => ({ payload: t });\n\nif (msg.topic === 'live') {\n    context.set('wanted', msg.payload === true);\n    if (msg.payload === true) {\n        if (running) return [null, st('Live už běží'), null];\n        context.set('running', true);\n        return [{ payload: '' }, st('Spouštím live…'), null];\n    }\n    if (running) return [{ kill: 'SIGTERM' }, st('Vypínám live…'), null];\n    return [null, st('Live vypnuto'), null];\n}\n\n// return code from the exec node: the reader has ended\nif (msg.payload && typeof msg.payload === 'object' && 'code' in msg.payload) {\n    context.set('running', false);\n    const wanted = context.get('wanted') === true;\n    context.set('wanted', false);\n    const code = msg.payload.code;\n    if (!wanted) return [null, st('Live vypnuto'), null];\n    const why = {\n        0: 'Live se samo vypnulo po 30 minutách',\n        2: 'Live nejde spustit: port je obsazený nebo baterie neodpovídá',\n        3: 'Live přerušeno: chyba komunikace s baterií',\n    }[code] || ('Live skončilo (kód ' + code + ')');\n    return [null, st(why), { payload: false }];\n}\nreturn null;",
-    "outputs": 3,
-    "timeout": 0,
-    "noerr": 0,
-    "initialize": "// After a deploy or restart nothing is running (the exec node kills its process on redeploy).\ncontext.set('running', false);\ncontext.set('wanted', false);",
-    "finalize": "",
-    "libs": [],
-    "x": 290,
-    "y": 100,
-    "wires": [
-      [
-        "pylon-live-exec"
-      ],
-      [
-        "pylon-live-status"
-      ],
-      [
-        "pylon-live-switch"
-      ]
-    ]
-  },
-  {
     "id": "pylon-live-exec",
     "type": "exec",
     "z": "batt-tab-01",
@@ -214,7 +188,7 @@
         "pylon-live-stderr"
       ],
       [
-        "pylon-live-ctrl"
+        "pylon-live-rc"
       ]
     ]
   },
@@ -294,5 +268,370 @@
     "wires": [
       []
     ]
+  },
+  {
+    "id": "pylon-port-ctrl",
+    "type": "function",
+    "z": "batt-tab-01",
+    "name": "Port controller (Live / export)",
+    "func": "// One owner of the battery port at a time: Live (pylontech_live.py) or the log export\n// (pylontech_export.py). Inputs (msg.topic): 'live' (switch), 'export' / 'export_cancel'\n// (buttons), 'live_rc' / 'export_rc' (a process ended).\n// Outputs: 1 live exec, 2 status text, 3 Live switch, 4 export exec, 5 export panel.\nconst mode = context.get('mode') || 'idle';          // idle | live | export\nconst st = (t) => ({ payload: t });\nconst startExport = () => {\n    context.set('mode', 'export');\n    return [null, st('Stahuji logy pro reklamaci…'), null, { payload: '' },\n            { payload: { state: 'running', step: 'start' } }];\n};\n\nswitch (msg.topic) {\ncase 'live':\n    if (msg.payload === true) {\n        if (mode === 'export') return [null, st('Probíhá stahování logů – Live teď nejde zapnout'), { payload: false }, null, null];\n        if (mode === 'live') return [null, st('Live už běží'), null, null, null];\n        context.set('mode', 'live');\n        context.set('wanted', true);\n        return [{ payload: '' }, st('Spouštím live…'), null, null, null];\n    }\n    context.set('wanted', false);\n    if (mode === 'live') return [{ kill: 'SIGTERM' }, st('Vypínám live…'), null, null, null];\n    return null;\n\ncase 'export':\n    if (mode === 'export') return [null, st('Stahování logů už běží'), null, null, null];\n    if (mode === 'live') {\n        context.set('pendingExport', true);\n        context.set('wanted', false);\n        return [{ kill: 'SIGTERM' }, st('Vypínám Live a spouštím stahování logů…'), { payload: false }, null, null];\n    }\n    return startExport();\n\ncase 'export_cancel':\n    if (mode === 'export') return [null, st('Ruším stahování logů…'), null, { kill: 'SIGTERM' }, null];\n    context.set('pendingExport', false);\n    return [null, st('Žádné stahování neběží'), null, null, null];\n\ncase 'live_rc': {\n    if (mode !== 'live') return null;\n    context.set('mode', 'idle');\n    if (context.get('pendingExport') === true) {\n        context.set('pendingExport', false);\n        return startExport();\n    }\n    const wanted = context.get('wanted') === true;\n    context.set('wanted', false);\n    if (!wanted) return [null, st('Live vypnuto'), null, null, null];\n    const code = msg.payload && msg.payload.code;\n    const why = {\n        0: 'Live se samo vypnulo po 30 minutách',\n        2: 'Live nejde spustit: port je obsazený nebo baterie neodpovídá',\n        3: 'Live přerušeno: chyba komunikace s baterií',\n    }[code] || ('Live skončilo (kód ' + code + ')');\n    return [null, st(why), { payload: false }, null, null];\n}\n\ncase 'export_rc': {\n    if (mode !== 'export') return null;\n    context.set('mode', 'idle');\n    const code = msg.payload && msg.payload.code;\n    if (code === 0) return null;                       // the \"done\" line already updated the panel\n    const why = {\n        2: 'Stahování nejde spustit: port je obsazený nebo baterie neodpovídá',\n        3: 'Stahování přerušeno: chyba komunikace s baterií',\n        4: 'Stahování zrušeno',\n    }[code] || ('Stahování skončilo s chybou (kód ' + code + ')');\n    return [null, st(why), null, null, { payload: { state: 'error', error: why, last: flow.get('last_export') } }];\n}\n}\nreturn null;",
+    "outputs": 5,
+    "timeout": 0,
+    "noerr": 0,
+    "initialize": "// After a deploy or restart nothing runs (exec nodes kill their processes on redeploy).\ncontext.set('mode', 'idle');\ncontext.set('wanted', false);\ncontext.set('pendingExport', false);",
+    "finalize": "",
+    "libs": [],
+    "x": 290,
+    "y": 140,
+    "wires": [
+      [
+        "pylon-live-exec"
+      ],
+      [
+        "pylon-live-status"
+      ],
+      [
+        "pylon-live-switch"
+      ],
+      [
+        "pylon-export-exec"
+      ],
+      [
+        "pylon-export-panel"
+      ]
+    ]
+  },
+  {
+    "id": "pylon-live-rc",
+    "type": "function",
+    "z": "batt-tab-01",
+    "name": "Live ended",
+    "func": "msg.topic = 'live_rc';\nreturn msg;",
+    "outputs": 1,
+    "timeout": 0,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 290,
+    "y": 60,
+    "wires": [
+      [
+        "pylon-port-ctrl"
+      ]
+    ]
+  },
+  {
+    "id": "pylon-export-rc",
+    "type": "function",
+    "z": "batt-tab-01",
+    "name": "Export ended",
+    "func": "msg.topic = 'export_rc';\nreturn msg;",
+    "outputs": 1,
+    "timeout": 0,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 290,
+    "y": 300,
+    "wires": [
+      [
+        "pylon-port-ctrl"
+      ]
+    ]
+  },
+  {
+    "id": "pylon-export-btn",
+    "type": "ui-button",
+    "z": "batt-tab-01",
+    "group": "pylon-bms-group-01",
+    "name": "",
+    "label": "Logy pro reklamaci",
+    "order": 3,
+    "width": "4",
+    "height": "1",
+    "emitOnClick": true,
+    "buttonColor": "",
+    "textColor": "",
+    "iconColor": "",
+    "icon": "mdi-download",
+    "iconPosition": "left",
+    "payload": "",
+    "payloadType": "str",
+    "topic": "export",
+    "topicType": "str",
+    "x": 110,
+    "y": 200,
+    "wires": [
+      [
+        "pylon-port-ctrl"
+      ]
+    ]
+  },
+  {
+    "id": "pylon-export-cancel",
+    "type": "ui-button",
+    "z": "batt-tab-01",
+    "group": "pylon-bms-group-01",
+    "name": "",
+    "label": "Zrušit",
+    "order": 4,
+    "width": "2",
+    "height": "1",
+    "emitOnClick": true,
+    "buttonColor": "",
+    "textColor": "",
+    "iconColor": "",
+    "icon": "mdi-close",
+    "iconPosition": "left",
+    "payload": "",
+    "payloadType": "str",
+    "topic": "export_cancel",
+    "topicType": "str",
+    "x": 110,
+    "y": 240,
+    "wires": [
+      [
+        "pylon-port-ctrl"
+      ]
+    ]
+  },
+  {
+    "id": "pylon-export-exec",
+    "type": "exec",
+    "z": "batt-tab-01",
+    "name": "pylontech_export.py",
+    "command": "python3 -u /data/pylontech/app/pylontech_export.py",
+    "addpay": "",
+    "append": "",
+    "useSpawn": "true",
+    "timer": "",
+    "winHide": false,
+    "oldrc": false,
+    "x": 520,
+    "y": 260,
+    "wires": [
+      [
+        "pylon-export-split"
+      ],
+      [
+        "pylon-live-stderr"
+      ],
+      [
+        "pylon-export-rc"
+      ]
+    ]
+  },
+  {
+    "id": "pylon-export-split",
+    "type": "split",
+    "z": "batt-tab-01",
+    "name": "lines",
+    "splt": "\\n",
+    "spltType": "str",
+    "arraySplt": 1,
+    "arraySpltType": "len",
+    "stream": true,
+    "addname": "",
+    "property": "payload",
+    "x": 690,
+    "y": 260,
+    "wires": [
+      [
+        "pylon-export-json"
+      ]
+    ]
+  },
+  {
+    "id": "pylon-export-json",
+    "type": "json",
+    "z": "batt-tab-01",
+    "name": "",
+    "property": "payload",
+    "action": "obj",
+    "pretty": false,
+    "x": 810,
+    "y": 260,
+    "wires": [
+      [
+        "pylon-export-progress"
+      ]
+    ]
+  },
+  {
+    "id": "pylon-export-progress",
+    "type": "function",
+    "z": "batt-tab-01",
+    "name": "Export progress",
+    "func": "// JSON lines from pylontech_export.py -> export panel (+ status when done).\nvar d = msg.payload;\nif (!d || typeof d !== 'object') { return null; }\nvar last = flow.get('last_export');\nif (d.type === 'progress') {\n    d.state = 'running';\n    d.last = last;\n    return [{ payload: d }, null];\n}\nif (d.type === 'done') {\n    var rec = { name: d.name, size: d.size, duration_s: d.duration_s, retries: d.retries,\n                modules: d.modules, at: new Date().toLocaleString('cs-CZ') };\n    flow.set('last_export', rec);\n    return [{ payload: { state: 'done', last: rec } },\n            { payload: 'Logy připraveny ke stažení: ' + d.name }];\n}\nif (d.type === 'error') {\n    return [{ payload: { state: 'error', error: d.error, last: last } }, null];\n}\nreturn null;",
+    "outputs": 2,
+    "timeout": 0,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 830,
+    "y": 320,
+    "wires": [
+      [
+        "pylon-export-panel"
+      ],
+      [
+        "pylon-live-status"
+      ]
+    ]
+  },
+  {
+    "id": "pylon-export-panel",
+    "type": "ui-template",
+    "z": "batt-tab-01",
+    "group": "pylon-bms-group-01",
+    "name": "Export panel",
+    "order": 5,
+    "width": "6",
+    "height": "1",
+    "head": "",
+    "format": "<template>\n  <div style=\"font-size:12px; line-height:1.4\">\n    <div v-if=\"p && p.state === 'running'\">\n      <div style=\"margin-bottom:4px\">\n        <strong>Stahuji logy&hellip;</strong>\n        <span v-if=\"p.step === 'records'\"> M{{ p.module }} &middot; {{ p.kind === 'event' ? 'eventy' : 'historie' }} {{ p.done }}/{{ p.total }}</span>\n        <span v-else-if=\"p.step === 'master'\"> M1 (master) &middot; tabulky</span>\n        <span v-else-if=\"p.step === 'slave_header'\"> M{{ p.module }} &middot; info a statistiky</span>\n      </div>\n      <div style=\"height:8px; background:rgba(255,255,255,0.08); border-radius:4px; overflow:hidden\">\n        <div :style=\"{ width: pct + '%', height: '100%', background: '#42a5f5' }\"></div>\n      </div>\n      <div style=\"color:#888; font-size:11px; margin-top:3px\">\n        {{ pct }} %<span v-if=\"p.eta_s != null\"> &middot; zbývá asi {{ Math.max(1, Math.round(p.eta_s / 60)) }} min</span>\n        &middot; Live je během stahování vypnuté\n      </div>\n    </div>\n    <div v-else-if=\"p && p.state === 'error'\" style=\"color:#ef5350\">{{ p.error }}</div>\n    <div v-else-if=\"!p || !p.last\" style=\"color:#888\">\n      Logy pro reklamaci: všechny moduly ve formátu BatteryView (ZIP). Trvá asi 1&ndash;1,5 h, Live je mezitím vypnuté.\n    </div>\n    <div v-if=\"p && p.last && p.state !== 'running'\" style=\"margin-top:4px\">\n      <span style=\"color:#4caf50\" v-if=\"p.state === 'done'\">&#10003; Hotovo: </span>\n      <span style=\"color:#888\" v-else>Poslední stažení ({{ p.last.at }}): </span>\n      <a :href=\"'../pylontech/exports/' + p.last.name\" download style=\"color:#42a5f5\">{{ p.last.name }}</a>\n      <span style=\"color:#888\"> ({{ Math.round(p.last.size / 1024) }} kB<span v-if=\"p.last.duration_s\">, {{ Math.round(p.last.duration_s / 60) }} min</span>)</span>\n      <div v-if=\"p.last.modules\" style=\"color:#666; font-size:11px\">\n        <span v-for=\"m in p.last.modules\" :key=\"m.module\" style=\"margin-right:10px\">\n          M{{ m.module }}: {{ m.event }} eventů, {{ m.history }} záznamů<span v-if=\"m.missing && Object.keys(m.missing).length\" style=\"color:#ef5350\"> (chybí: {{ JSON.stringify(m.missing) }})</span>\n        </span>\n      </div>\n    </div>\n  </div>\n</template>\n\n<script>\nexport default {\n  computed: {\n    p() { return this.msg && this.msg.payload ? this.msg.payload : null; },\n    pct() {\n      const p = this.p;\n      if (!p || !p.records_total) return 0;\n      return Math.min(100, Math.round(100 * p.records_done / p.records_total));\n    }\n  }\n}\n</script>",
+    "storeOutMessages": true,
+    "passthru": false,
+    "resendOnRefresh": true,
+    "templateScope": "local",
+    "className": "",
+    "x": 1030,
+    "y": 300,
+    "wires": [
+      []
+    ]
+  },
+  {
+    "id": "pylon-export-init",
+    "type": "inject",
+    "z": "batt-tab-01",
+    "name": "on start",
+    "props": [],
+    "repeat": "",
+    "crontab": "",
+    "once": true,
+    "onceDelay": "2",
+    "topic": "",
+    "x": 620,
+    "y": 360,
+    "wires": [
+      [
+        "pylon-export-panel-init"
+      ]
+    ]
+  },
+  {
+    "id": "pylon-export-panel-init",
+    "type": "function",
+    "z": "batt-tab-01",
+    "name": "Last export",
+    "func": "// Show the last export after a deploy / restart.\nvar last = flow.get('last_export');\nmsg.payload = { state: 'idle', last: last || null };\nreturn msg;",
+    "outputs": 1,
+    "timeout": 0,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 830,
+    "y": 360,
+    "wires": [
+      [
+        "pylon-export-panel"
+      ]
+    ]
+  },
+  {
+    "id": "pylon-export-http",
+    "type": "http in",
+    "z": "batt-tab-01",
+    "name": "",
+    "url": "/pylontech/exports/:name",
+    "method": "get",
+    "upload": false,
+    "swaggerDoc": "",
+    "x": 160,
+    "y": 440,
+    "wires": [
+      [
+        "pylon-export-http-check"
+      ]
+    ]
+  },
+  {
+    "id": "pylon-export-http-check",
+    "type": "function",
+    "z": "batt-tab-01",
+    "name": "Only our ZIPs",
+    "func": "// GET /pylontech/exports/<name>: only our ZIP files, nothing else from the disk.\nvar name = (msg.req && msg.req.params && msg.req.params.name) || '';\nif (!/^pylontech_logs_[0-9A-Za-z_-]+\\.zip$/.test(name)) {\n    msg.statusCode = 404;\n    msg.payload = 'not found';\n    return [null, msg];\n}\nmsg.filename = '/data/pylontech/exports/' + name;\nreturn [msg, null];",
+    "outputs": 2,
+    "timeout": 0,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 400,
+    "y": 440,
+    "wires": [
+      [
+        "pylon-export-file"
+      ],
+      [
+        "pylon-export-http-resp"
+      ]
+    ]
+  },
+  {
+    "id": "pylon-export-file",
+    "type": "file in",
+    "z": "batt-tab-01",
+    "name": "read ZIP",
+    "filename": "filename",
+    "filenameType": "msg",
+    "format": "",
+    "chunk": false,
+    "sendError": true,
+    "encoding": "none",
+    "allProps": false,
+    "x": 600,
+    "y": 420,
+    "wires": [
+      [
+        "pylon-export-http-headers"
+      ]
+    ]
+  },
+  {
+    "id": "pylon-export-http-headers",
+    "type": "function",
+    "z": "batt-tab-01",
+    "name": "ZIP headers",
+    "func": "if (msg.error || !Buffer.isBuffer(msg.payload)) {\n    msg.statusCode = 404;\n    msg.payload = 'not found';\n    return msg;\n}\nmsg.statusCode = 200;\nmsg.headers = {\n    'Content-Type': 'application/zip',\n    'Content-Disposition': 'attachment; filename=\"' + msg.req.params.name + '\"'\n};\nreturn msg;",
+    "outputs": 1,
+    "timeout": 0,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 780,
+    "y": 420,
+    "wires": [
+      [
+        "pylon-export-http-resp"
+      ]
+    ]
+  },
+  {
+    "id": "pylon-export-http-resp",
+    "type": "http response",
+    "z": "batt-tab-01",
+    "name": "",
+    "statusCode": "",
+    "headers": {},
+    "x": 970,
+    "y": 440,
+    "wires": []
   }
 ]
