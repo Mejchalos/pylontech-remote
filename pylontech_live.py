@@ -7,7 +7,7 @@ the cells of every module (`bat N`); while start-up data is pending (`config`, `
 everything on the dashboard changes at once. A cycle starts every --interval seconds, or as soon
 as the previous one is done if that takes longer. At least --gap seconds pass between commands.
 
-Each line has the shape of the original pylontech_reader.py output (dashboard compatible).
+Each line has the shape of the original project's reader output (dashboard compatible).
 Stops on SIGTERM/SIGINT, when stdout goes away, or after --max-minutes.
 
   python3 pylontech_live.py                 # live stream

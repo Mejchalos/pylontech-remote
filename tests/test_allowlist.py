@@ -8,7 +8,7 @@ ALLOWED = [
     'datalist event 0', 'datalist history 1790', 'log',
 ]
 
-# Everything here changes, clears, tests or controls the battery (docs/CONSOLE-NOTES.md),
+# Everything here changes, clears, tests or controls the battery (listed in `help`),
 # or is an allowed command with something smuggled in.
 FORBIDDEN = [
     'time', 'time 2026 10 15 12 00 00', 'shut', 'trst', 'updata', 'login', 'login debug', 'logout',

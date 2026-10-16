@@ -1,7 +1,7 @@
 """Logs for a warranty claim, in the format of Pylontech BatteryView.
 
 BatteryView saves, per module, `<barcode>_event_<YYYYMMDDhhmmss>.txt` and
-`<barcode>_history_<…>.txt` (compared with real files from this stack, docs/CONSOLE-NOTES.md):
+`<barcode>_history_<…>.txt` (see docs/console-protocol.md):
 
 - event file:   `info`, `stat`, `pwr`, `datalist event 0`
 - history file: `info`, `stat`, `datalist history 0`

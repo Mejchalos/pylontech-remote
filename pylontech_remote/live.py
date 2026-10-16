@@ -1,6 +1,6 @@
 """Live data: stack state built from pwr / bat / info / stat / config replies.
 
-`StackState.snapshot()` returns the same JSON shape as the original pylontech_reader.py (so the
+`StackState.snapshot()` returns the same JSON shape as the original project's reader (so the
 existing dashboard widget keeps working), plus freshness information for the live view.
 """
 import re

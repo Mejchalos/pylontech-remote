@@ -1,8 +1,8 @@
 """Read-only command allow-list — the single gate for everything written to the console.
 
-Derived from docs/CONSOLE-NOTES.md. Anything not matching one of these patterns exactly is
-refused before a single byte is sent. Do not add commands that change, clear, test or control
-anything (see the forbidden list in CONSOLE-NOTES).
+See docs/console-protocol.md. Anything not matching one of these patterns exactly is refused
+before a single byte is sent. Do not add commands that change, clear, test or control anything
+(see the forbidden list in tests/test_allowlist.py).
 """
 import re
 

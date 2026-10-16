@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Capture raw Pylontech console replies, verbatim, for protocol research.
+Capture raw Pylontech console replies, verbatim, for diagnostics.
 
 Sends one or more READ-ONLY commands and stores each reply byte-for-byte
 (<outdir>/<stamp>_<command>.raw) plus metadata (.json: timing, byte count,

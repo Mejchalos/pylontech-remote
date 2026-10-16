@@ -1,3 +1,5 @@
 # Local battery captures (raw console output, serial numbers) - never commit
 captures/
+# Local working notes - not part of the project
+notes/
 __pycache__/

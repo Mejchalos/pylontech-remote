@@ -1,50 +1,32 @@
 # pylontech-rs232-venus
 
-Per-module **Pylontech BMS monitoring** for **Victron Cerbo GX / Venus OS**, read over the
-battery's **RS232 console port** through a USB/RS232 adapter — with a Node-RED dashboard.
+Remote access to **Pylontech** battery logs and live data on a **Victron Cerbo GX / Venus OS**,
+through the RS232 console of the battery's master module and a Node-RED dashboard.
 
-> **This branch (`pylontech-remote`)** gets the logs Pylontech support needs for a warranty claim
-> **remotely**, through the master module's console only: per module the BatteryView event and
-> history `.txt` files, as one ZIP from the dashboard. Plus a live view of the whole stack.
-> **Current state and what blocks real use: [docs/STATUS.md](docs/STATUS.md)** · Design:
-> [ARCHITECTURE.md](ARCHITECTURE.md) · Console findings: [docs/CONSOLE-NOTES.md](docs/CONSOLE-NOTES.md).
-> Based on the original project by **Martin (tejno)** — see [Credits](#credits).
+- **Logs for a warranty claim** — one button downloads the event and history logs of every
+  module in the stack as the files Pylontech BatteryView saves, packed in one ZIP. Works through
+  VRM, without a technician on site.
+- **Live view** — pack, modules and cells of the whole stack, updated every 8 s, plus the
+  lifetime counters of each module.
 
-The Victron CAN bus only exposes pack-level aggregates. The RS232 console of the **master** module
-gives **per-module and per-cell** data for the whole stack: cell voltages, temperatures, SOC, SOH,
-balancing, cycle counts, BMS thresholds — and the history and event records of every module.
+The Victron CAN bus only exposes pack-level values. The console of the **master** module gives
+per-module and per-cell data for the whole stack, and the stored records of every module.
 
-![Pylontech BMS dashboard — /battery page](docs/dashboard.png)
+Based on the original project by **Martin (tejno)** — see [Credits](#credits).
 
----
-
-## Status
-
-| Part | State |
-|---|---|
-| Realtime dashboard (Live switch) | **works** — `pylontech_live.py` + `nodered/pylontech_flow.json` |
-| Read-only safety (command allow-list) | **works** — `pylontech_remote/allowlist.py`, covered by tests |
-| History / event research, slave modules through the master | **done** — [docs/CONSOLE-NOTES.md](docs/CONSOLE-NOTES.md) |
-| **Logs for a warranty claim** (all modules, BatteryView file format, ZIP) | **works** — `pylontech_export.py`, dashboard button; compared with real BatteryView files |
-| Acceptance of the rebuilt slave files by Pylontech support | **open** — to be asked ([draft](docs/FOR-PYLONTECH-SUPPORT.md)) |
-| Other firmwares / models | **untested** |
-| Boot persistence (udev rule after a Venus OS update), installer, FTDI cable | planned — the old `install.sh` is **legacy**, see below |
-
-Verified on a 4× US3000C stack, firmware B69.25.0.0, Venus OS v3.81 (Cerbo GX), CH340 cable.
-Details and limits: [docs/STATUS.md](docs/STATUS.md).
+![Pylontech BMS dashboard](docs/dashboard.png)
 
 ---
 
 ## Safety
 
-- The battery only ever receives **read** commands. Every command passes one allow-list
+- The battery only receives **read** commands. Every command passes one allow-list
   (`pylontech_remote/allowlist.py`) before a byte is written; commands that change, clear, test or
   control anything (`time`, `datac`, `config <x> <val>`, `shut`, `ctrl`, …) are refused. Tests
   assert this.
 - Nothing on the Victron side is changed (no ESS/DVCC/BMS settings, no D-Bus battery service). The
   BMS-CAN link is not touched.
-- The port is opened exclusively, with DTR/RTS low before opening (the battery does not answer with
-  them asserted).
+- The port is opened exclusively, with DTR/RTS low before opening.
 
 ---
 
@@ -52,20 +34,21 @@ Details and limits: [docs/STATUS.md](docs/STATUS.md).
 
 | Item | Detail |
 |---|---|
-| Adapter | USB ↔ RS232. **FTDI (FT232R) recommended** — it has a serial number, so the udev rule follows the cable to any USB socket. A CH340 works too (tested), but has no serial number: the rule then matches the USB socket. |
-| Cable | RJ45 → DB9 into the **Console** port of the **master** module only — the master relays the slaves. |
-| Link | 115200 8N1, no flow control, **DTR/RTS = False** |
+| Adapter | USB ↔ RS232. **FTDI (FT232R) recommended** — it has a serial number, so the udev rule follows the cable to any USB socket. CH340 works too, but has no serial number: the rule then matches the USB socket. |
+| Cable | RJ45 → DB9 into the **Console** port of the **master** module only — the master relays the other modules. |
+| Link | 115200 8N1, no flow control, DTR/RTS off |
+
+Tested with: 4× US3000C, firmware B69.25.0.0, Venus OS v3.81, Cerbo GX.
 
 ### Keep Venus OS away from the port
 
-Venus OS's `serial-starter` probes every USB serial adapter as one of its own devices (an FT232R as
-RS485, a CH340 as a Zigbee energy-meter converter) and writes probe traffic to the battery console.
-A udev rule must set `VE_SERVICE=ignore` for the adapter. Two details matter:
+Venus OS's `serial-starter` probes every USB serial adapter as one of its own devices and writes
+probe traffic to the battery console. A udev rule must set `VE_SERVICE=ignore` for the adapter:
 
-- name the file so it sorts **after** `serial-starter.rules`, e.g. `zz-pylontech-console.rules`
-  (a `99-…` rule is processed first and then overridden);
-- `/etc` is replaced by a Venus OS update — re-create the rule after updating (boot persistence is
-  planned, see [ARCHITECTURE.md](ARCHITECTURE.md) §5.1).
+- name the file so it sorts **after** `serial-starter.rules`, e.g.
+  `/etc/udev/rules.d/zz-pylontech-console.rules` (a `99-…` rule is processed first and then
+  overridden);
+- `/etc` is replaced by a Venus OS update — re-create the rule after updating.
 
 ```
 # FTDI: by serial number   (udevadm info -q property -n /dev/ttyUSB0 | grep ID_SERIAL_SHORT)
@@ -85,13 +68,13 @@ fuser /dev/ttyUSB0                                               # → nothing
 
 ---
 
-## Install (current, manual)
+## Install
 
-Prerequisites on the Cerbo: root SSH, Venus OS **Large** (Python 3 + pyserial are included),
-Node-RED with **Dashboard 2.0** (`@flowfuse/node-red-dashboard`, install from the palette manager).
+Requirements on the Cerbo: root SSH, Venus OS **Large** (Python 3 and pyserial included),
+Node-RED with **Dashboard 2.0** (`@flowfuse/node-red-dashboard`, from the palette manager).
 
 ```bash
-# from a checkout of this branch on your PC
+# from a checkout of this repository on your PC
 ssh root@<cerbo-ip> 'mkdir -p /data/pylontech/app/pylontech_remote /data/pylontech/state /data/pylontech/exports && chown nodered:nodered /data/pylontech/state /data/pylontech/exports'
 scp pylontech_live.py pylontech_export.py root@<cerbo-ip>:/data/pylontech/app/
 scp pylontech_remote/*.py root@<cerbo-ip>:/data/pylontech/app/pylontech_remote/
@@ -100,117 +83,104 @@ scp pylontech_remote/*.py root@<cerbo-ip>:/data/pylontech/app/pylontech_remote/
 ssh root@<cerbo-ip> 'python3 /data/pylontech/app/pylontech_live.py --once'
 ```
 
-Then in Node-RED: delete an older **Battery** tab if present → Menu → **Import**
-`nodered/pylontech_flow.json` → **Deploy** (choose *Modified Flows* so other flows are not
-restarted) → open `http://<cerbo-ip>:1880/dashboard/battery` and switch **Live** on.
+Then in Node-RED: Menu → **Import** `nodered/pylontech_flow.json` → **Deploy** (choose
+*Modified Flows* so other flows are not restarted) → open
+`http://<cerbo-ip>:1880/dashboard/battery`.
 
-Every change made on a Cerbo for this project is listed with its undo in
-[CHANGES-ON-CERBO.md](CHANGES-ON-CERBO.md).
-
-### Legacy `install.sh` / `pylontech_reader.py`
-
-The original one-shot reader and installer are still in the repo. Known limits: the installer
-only detects FTDI adapters, writes a `99-…` rule that `serial-starter.rules` overrides, restarts
-serial-starter and may run `opkg`/`pip`. Use the manual steps above instead; a new installer is
-planned.
+To remove: delete the **Battery** tab in Node-RED, `rm -r /data/pylontech` and the udev rule.
 
 ---
 
 ## Logs for a warranty claim
 
-Dashboard button **Logy pro reklamaci** (or `python3 pylontech_export.py` on the Cerbo) downloads
-the event and history logs of **every module** through the master's console and builds one ZIP in
-`/data/pylontech/exports/` (last 5 kept), downloadable from the dashboard (also through VRM):
+Dashboard button **Logy pro reklamaci** (or `python3 pylontech_export.py` on the Cerbo) reads
+the event and history logs of every module through the master's console and builds one ZIP in
+`/data/pylontech/exports/` (last 5 kept), downloadable from the dashboard:
 
-- `<barcode>_event_<stamp>.txt` (`info`, `stat`, `pwr`, event table) and
-  `<barcode>_history_<stamp>.txt` (`info`, `stat`, history table) per module — the files
-  Pylontech BatteryView saves, which support asks for;
-- **master**: its tables byte-identical to BatteryView's (compared with real BatteryView files of
-  this stack), ~2 min;
-- **other modules**: `info N`, `stat N`, `pwr N` as the battery answers them (same content as on
-  the module's own console), tables rebuilt row by row from the module's own records
-  (`data N event|history <i>`) — every value column identical to BatteryView's file of that module;
-  Rec_chg/dsg_cur, Sys_Rec and ID Cur cannot be read through the master and are `-`; marked as
-  reconstructed. ~30 min per module (~1.5 h for a 4-module stack); Live is paused meanwhile;
-- `README.txt` and `raw/` (every console reply as received, incomplete replies in `raw/failed/`).
+- per module `<barcode>_event_<stamp>.txt` (`info`, `stat`, `pwr`, event table) and
+  `<barcode>_history_<stamp>.txt` (`info`, `stat`, history table) — the files BatteryView saves;
+- `README.txt` and `raw/` (every console reply as received).
 
-Records are read newest first, checked (a reply must end with `Command completed successfully`),
-re-read when the master cut a slave's answer short (~1 % of reads; the rest of such an answer
-comes with the next reply, so a record is only accepted with its own index, time and full cell
-table), and deduplicated when the
-battery drops its oldest block of 8 history records during the run.
+**Master module:** identical to BatteryView's files, ~2 min.
+
+**Other modules:** the master does not relay their tables, so each table is rebuilt from the
+module's own records (`data N event|history <i>`). Every value column matches BatteryView's file
+of that module. `Rec_chg/dsg_cur`, `Sys_Rec_chg/dsg_cur` and `ID Cur` cannot be read through the
+master and are written as `-`; the table is marked as reconstructed. ~30 min per module; Live is
+paused meanwhile.
+
+Every reply is checked; replies the master cut short (~1 %) are read again, and records the
+battery drops from its ring buffer during the run are handled. Details:
+[docs/console-protocol.md](docs/console-protocol.md).
 
 ## Dashboard
 
-- **Live** switch: starts `pylontech_live.py`, which keeps the port open and every **8 s** reads
-  the stack summary (`pwr`) and the cells of every module (`bat N`) — the whole page updates at
-  once. Model, serial, firmware, SOH, cycles and thresholds are kept in
-  `/data/pylontech/state/static.json` (written only when a value changes), so the page is
-  complete from the first update (~9 s after switching on; ~25 s the very first time) and these
-  values are refreshed in the background. Live switches itself off after **30 min** and frees
-  the port.
-- **Click a module's header** to open its lifetime counters (`stat N`, ~120 values) in four
-  groups: alarms & protections (non-zero ones highlighted), operation, time spent in current /
-  SOC / temperature ranges (shown in hours/days), stored records. Zero values are hidden unless
-  switched on. They are read when Live starts and every 10 min, and kept in the state file so
-  they show at once.
-- **BHV counter increases**: the per-module Bat-HV number is the battery's lifetime counter. The
-  list below the modules only records increases that happen while the dashboard is watching
-  (time = when it was noticed); the real alarm times are in the battery's event records.
-- Pack summary: SOC, current, temperature, capacity (Ah + kWh), SOH, total cell spread.
-- Per module: model, serial, firmware, SOC, current, temperature, capacity, SOH (`bms`/`est`),
-  cycles, Bat-HV alarm count, age of the cell data.
-- 15-cell colour bar using the battery's own thresholds from `config`.
+- **Live** switch: reads the stack summary (`pwr`) and the cells of every module (`bat N`) every
+  **8 s**; the whole page updates at once. Model, serial, firmware, SOH, cycles and thresholds are
+  kept in `/data/pylontech/state/static.json`, so the page is complete from the first update.
+  Live switches itself off after **30 min** and frees the port.
+- **Click a module's header** to open its lifetime counters (`stat N`, ~120 values): alarms and
+  protections, operation, time in current / SOC / temperature ranges, stored records.
+- **BHV counter increases** noticed while the dashboard is watching (the exact alarm times are in
+  the event log).
+- Pack summary: SOC, current, temperature, capacity (Ah + kWh), SOH, cell spread.
+- Per module: model, serial, firmware, SOC, current, temperature, capacity, SOH, cycles, cells
+  with a colour bar using the battery's own thresholds.
 
-Command-line options (`python3 pylontech_live.py --help`): `--port` (or env `PYLONTECH_PORT`,
-default `/dev/ttyUSB0`), `--interval`, `--gap` (minimum pause between commands, default 1.2 s),
-`--max-minutes`, `--once`, `--state-file` (`''` = keep nothing).
+Options (`python3 pylontech_live.py --help`): `--port` (or env `PYLONTECH_PORT`, default
+`/dev/ttyUSB0`), `--interval`, `--gap`, `--max-minutes`, `--once`, `--state-file`.
+
+---
+
+## Limitations
+
+- Tested on US3000C with firmware B69.25 only. Other models and firmwares may format the console
+  output differently or not relay the other modules' records.
+- The udev rule in `/etc` does not survive a Venus OS update.
+- The console has one user: Live and the log export never run at the same time, and BatteryView
+  cannot be used on the same port while either runs.
 
 ---
 
 ## Repository
 
 ```
-pylontech_live.py         realtime reader (JSON lines on stdout)
-pylontech_export.py       logs for a warranty claim -> ZIP in BatteryView format
-pylontech_remote/         allow-list, console session, parsers, stack state
+pylontech_live.py         live reader (JSON lines on stdout)
+pylontech_export.py       logs for a warranty claim -> ZIP
+pylontech_remote/         allow-list, console session, parsers, stack state, export format
 nodered/                  Node-RED flow (Dashboard 2.0)
-tests/                    unit tests + captured console replies (python -m unittest discover -s tests -t .)
-tools/console_capture.py  research tool: saves raw console replies (allow-listed commands only)
-docs/CONSOLE-NOTES.md     what the console does: commands, record formats, BatteryView export
-ARCHITECTURE.md           design: what is built, what is planned, what is not
-docs/STATUS.md            current state, limits, what blocks real use, next steps
-docs/FOR-PYLONTECH-SUPPORT.md  draft note asking Pylontech whether they can process the files
-CHANGES-ON-CERBO.md       log of every change made on the Cerbo
-install.sh, pylontech_reader.py, udev/   legacy, from the original project
+tests/                    unit tests with recorded console replies
+tools/console_capture.py  saves raw console replies (allow-listed commands only)
+docs/console-protocol.md  console commands, record formats, BatteryView file format
 ```
+
+Tests: `python -m unittest discover -s tests -t .`
 
 ---
 
 ## Troubleshooting
 
-**`port_open: … held by pid …` / Live does not start** — something else has the port:
+**Live does not start / `port_open: … held by pid …`** — something else has the port:
 ```bash
-fuser /dev/ttyUSB0                                         # who holds it
+fuser /dev/ttyUSB0                                           # who holds it
 udevadm info -q property -n /dev/ttyUSB0 | grep VE_SERVICE   # must be "ignore"
 ```
 If `VE_SERVICE` is not `ignore`, the udev rule is missing (e.g. after a Venus OS update) or the
 cable is in a different USB socket than the rule expects.
 
-**Battery returns nothing** — check DTR/RTS (must be off), the cable is in the **Console** socket of
-the master, and nothing else holds the port. `python3 pylontech_live.py --once` prints the error.
+**Battery returns nothing** — check that the cable is in the **Console** socket of the master and
+nothing else holds the port. `python3 pylontech_live.py --once` prints the error.
 
 ---
 
 ## Credits
 
 Original project **pylontech-rs232-venus** by **Martin (tejno)** — reader, installer and the
-dashboard widget this branch builds on. If it saved you time, support him:
+dashboard widget this project builds on. If it saved you time, support him:
 [![Ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/tejnoo) → **[ko-fi.com/tejnoo](https://ko-fi.com/tejnoo)**
 
 ## License
 
-MIT — see [LICENSE](LICENSE) (copyright Martin (tejno); changes in this fork under the same license).
+MIT — see [LICENSE](LICENSE) (copyright Martin (tejno); changes under the same license).
 
-Not affiliated with Pylontech or Victron Energy. Use at your own risk; reading the console is
-passive but you are responsible for your own battery system.
+Not affiliated with Pylontech or Victron Energy. Use at your own risk.
