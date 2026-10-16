@@ -3,10 +3,11 @@
 Per-module **Pylontech BMS monitoring** for **Victron Cerbo GX / Venus OS**, read over the
 battery's **RS232 console port** through a USB/RS232 adapter — with a Node-RED dashboard.
 
-> **This branch (`pylontech-remote`) is work in progress** towards a remote equivalent of
-> Pylontech BatteryView: a realtime dashboard now, and soon a complete history/event archive kept
-> beyond what the battery stores (~37 days), exported in the format Pylontech support asks for.
-> Design: [ARCHITECTURE.md](ARCHITECTURE.md) · Console findings: [docs/CONSOLE-NOTES.md](docs/CONSOLE-NOTES.md).
+> **This branch (`pylontech-remote`)** gets the logs Pylontech support needs for a warranty claim
+> **remotely**, through the master module's console only: per module the BatteryView event and
+> history `.txt` files, as one ZIP from the dashboard. Plus a live view of the whole stack.
+> **Current state and what blocks real use: [docs/STATUS.md](docs/STATUS.md)** · Design:
+> [ARCHITECTURE.md](ARCHITECTURE.md) · Console findings: [docs/CONSOLE-NOTES.md](docs/CONSOLE-NOTES.md).
 > Based on the original project by **Martin (tejno)** — see [Credits](#credits).
 
 The Victron CAN bus only exposes pack-level aggregates. The RS232 console of the **master** module
@@ -24,12 +25,13 @@ balancing, cycle counts, BMS thresholds — and the history and event records of
 | Realtime dashboard (Live switch) | **works** — `pylontech_live.py` + `nodered/pylontech_flow.json` |
 | Read-only safety (command allow-list) | **works** — `pylontech_remote/allowlist.py`, covered by tests |
 | History / event research, slave modules through the master | **done** — [docs/CONSOLE-NOTES.md](docs/CONSOLE-NOTES.md) |
-| **Logs for a warranty claim** (all modules, BatteryView file format, ZIP) | **works** — `pylontech_export.py`, dashboard button |
-| History archive beyond the battery's ~37 days, incremental sync | planned — [ARCHITECTURE.md](ARCHITECTURE.md) |
-| Long-running service, boot persistence, new installer | planned — the old `install.sh` is **legacy**, see below |
+| **Logs for a warranty claim** (all modules, BatteryView file format, ZIP) | **works** — `pylontech_export.py`, dashboard button; compared with real BatteryView files |
+| Acceptance of the rebuilt slave files by Pylontech support | **open** — to be asked ([draft](docs/FOR-PYLONTECH-SUPPORT.md)) |
+| Other firmwares / models | **untested** |
+| Boot persistence (udev rule after a Venus OS update), installer, FTDI cable | planned — the old `install.sh` is **legacy**, see below |
 
-Verified on a 4× US3000C stack, firmware B69.25.0.0, Venus OS v3.81 (Cerbo GX).
-Other firmwares may differ (see the notes).
+Verified on a 4× US3000C stack, firmware B69.25.0.0, Venus OS v3.81 (Cerbo GX), CH340 cable.
+Details and limits: [docs/STATUS.md](docs/STATUS.md).
 
 ---
 
@@ -63,7 +65,7 @@ A udev rule must set `VE_SERVICE=ignore` for the adapter. Two details matter:
 - name the file so it sorts **after** `serial-starter.rules`, e.g. `zz-pylontech-console.rules`
   (a `99-…` rule is processed first and then overridden);
 - `/etc` is replaced by a Venus OS update — re-create the rule after updating (boot persistence is
-  part of the planned service).
+  planned, see [ARCHITECTURE.md](ARCHITECTURE.md) §5.1).
 
 ```
 # FTDI: by serial number   (udevadm info -q property -n /dev/ttyUSB0 | grep ID_SERIAL_SHORT)
@@ -176,7 +178,9 @@ nodered/                  Node-RED flow (Dashboard 2.0)
 tests/                    unit tests + captured console replies (python -m unittest discover -s tests -t .)
 tools/console_capture.py  research tool: saves raw console replies (allow-listed commands only)
 docs/CONSOLE-NOTES.md     what the console does: commands, record formats, BatteryView export
-ARCHITECTURE.md           design of the full service (archive, sync, export, maintenance)
+ARCHITECTURE.md           design: what is built, what is planned, what is not
+docs/STATUS.md            current state, limits, what blocks real use, next steps
+docs/FOR-PYLONTECH-SUPPORT.md  draft note asking Pylontech whether they can process the files
 CHANGES-ON-CERBO.md       log of every change made on the Cerbo
 install.sh, pylontech_reader.py, udev/   legacy, from the original project
 ```

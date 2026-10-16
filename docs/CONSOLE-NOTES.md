@@ -60,8 +60,8 @@ The help text omits this argument, just as it omits the module number of `stat N
   SYSERR, …). Some flag values (e.g. `0x40`) are printed without a name.
 - Timestamps: `YY-MM-DD HH:MM:SS`, battery local time, no time zone in the record. The battery
   clock runs **~9 min ahead** of the Cerbo (CEST): the newest `log` entry was stamped 17:19:43
-  when the Cerbo showed 17:10:53. The archive must store the battery time verbatim and record the
-  observed offset at sync time; the clock is never set (`time` is forbidden).
+  when the Cerbo showed 17:10:53. Battery times are kept verbatim in the export; the clock is
+  never set (`time` is forbidden).
 - Without a module number the records are the **master module's own** (module current/SOC match
   module 1, Total Coulomb 74000 mAh = one US3000C). Slaves: see the section above.
 
@@ -165,11 +165,10 @@ Text log of the master (`ModID : BMM`), **newest first**, only 32 entries (index
  Info    : The device start discharging.
 ```
 
-11 pages, ~2.2 s with Enter paging. Low archive value unless polled often.
+11 pages, ~2.2 s with Enter paging. Not part of the BatteryView files; not exported.
 
-## Time budget for a full download
+## Time for a full export (measured 2026-10-16, 4× US3000C)
 
-Per module ~1800 history + ~85 events; 0.4 s per record on the master, 0.6 s on a slave, plus the
-1.2–2 s pause between commands → roughly 1 h per module, **~4–5 h for the whole 4-module stack** on
-the first full sync. Afterwards only new records (4 modules × 1 per 30 min). The pause may be
-shorter (untested).
+Master: `datalist` tables ~2 min. Slaves: `data N …` record by record, 0.6 s reply + 0.2 s pause
+(tested against 1.2 s: same bytes) + re-reads of cut replies ≈ 0.9 s per record → ~30 min per
+module (~1 800 history + ~100–230 events). Whole stack: **~1 h 25 min**.
