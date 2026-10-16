@@ -2,8 +2,9 @@
 
 Status: **proposal** (phase 4, 2026-10-15), first part implemented: the console core
 (`pylontech_remote/`: allow-list §4.2, session, parsers) and the realtime live reader
-(`pylontech_live.py`). Until the service exists, Live is started by the Node-RED Live switch
-(exec node, JSON lines on stdout) instead of MQTT (§4.7); archive, sync and export are not built yet.
+(`pylontech_live.py`), and the on-demand log export for warranty claims (`pylontech_export.py`,
+§4.11 — the main goal). Until the service exists, both are started from Node-RED (exec nodes, JSON
+lines on stdout) instead of MQTT (§4.7); the archive and background sync are not built yet.
 Facts it relies on are verified in [docs/CONSOLE-NOTES.md](docs/CONSOLE-NOTES.md) and
 [CHANGES-ON-CERBO.md](CHANGES-ON-CERBO.md).
 

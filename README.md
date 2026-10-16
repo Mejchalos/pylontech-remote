@@ -24,7 +24,8 @@ balancing, cycle counts, BMS thresholds — and the history and event records of
 | Realtime dashboard (Live switch) | **works** — `pylontech_live.py` + `nodered/pylontech_flow.json` |
 | Read-only safety (command allow-list) | **works** — `pylontech_remote/allowlist.py`, covered by tests |
 | History / event research, slave modules through the master | **done** — [docs/CONSOLE-NOTES.md](docs/CONSOLE-NOTES.md) |
-| History archive (SQLite), incremental sync, BatteryView export | planned — [ARCHITECTURE.md](ARCHITECTURE.md) |
+| **Logs for a warranty claim** (all modules, BatteryView file format, ZIP) | **works** — `pylontech_export.py`, dashboard button |
+| History archive beyond the battery's ~37 days, incremental sync | planned — [ARCHITECTURE.md](ARCHITECTURE.md) |
 | Long-running service, boot persistence, new installer | planned — the old `install.sh` is **legacy**, see below |
 
 Verified on a 4× US3000C stack, firmware B69.25.0.0, Venus OS v3.81 (Cerbo GX).
@@ -89,8 +90,8 @@ Node-RED with **Dashboard 2.0** (`@flowfuse/node-red-dashboard`, install from th
 
 ```bash
 # from a checkout of this branch on your PC
-ssh root@<cerbo-ip> 'mkdir -p /data/pylontech/app/pylontech_remote /data/pylontech/state && chown nodered:nodered /data/pylontech/state'
-scp pylontech_live.py root@<cerbo-ip>:/data/pylontech/app/
+ssh root@<cerbo-ip> 'mkdir -p /data/pylontech/app/pylontech_remote /data/pylontech/state /data/pylontech/exports && chown nodered:nodered /data/pylontech/state /data/pylontech/exports'
+scp pylontech_live.py pylontech_export.py root@<cerbo-ip>:/data/pylontech/app/
 scp pylontech_remote/*.py root@<cerbo-ip>:/data/pylontech/app/pylontech_remote/
 
 # test on the Cerbo: one full read, prints one JSON line
@@ -112,6 +113,30 @@ serial-starter and may run `opkg`/`pip`. Use the manual steps above instead; a n
 planned.
 
 ---
+
+## Logs for a warranty claim
+
+Dashboard button **Logy pro reklamaci** (or `python3 pylontech_export.py` on the Cerbo) downloads
+the event and history logs of **every module** through the master's console and builds one ZIP in
+`/data/pylontech/exports/` (last 5 kept), downloadable from the dashboard (also through VRM):
+
+- `<barcode>_event_<stamp>.txt` (`info`, `stat`, `pwr`, event table) and
+  `<barcode>_history_<stamp>.txt` (`info`, `stat`, history table) per module — the files
+  Pylontech BatteryView saves, which support asks for;
+- **master**: its tables byte-identical to BatteryView's (compared with real BatteryView files of
+  this stack), ~2 min;
+- **other modules**: `info N`, `stat N`, `pwr N` as the battery answers them (same content as on
+  the module's own console), tables rebuilt row by row from the module's own records
+  (`data N event|history <i>`) — every value column identical to BatteryView's file of that module;
+  Rec_chg/dsg_cur, Sys_Rec and ID Cur cannot be read through the master and are `-`; marked as
+  reconstructed. ~30 min per module (~1.5 h for a 4-module stack); Live is paused meanwhile;
+- `README.txt` and `raw/` (every console reply as received, incomplete replies in `raw/failed/`).
+
+Records are read newest first, checked (a reply must end with `Command completed successfully`),
+re-read when the master cut a slave's answer short (~1 % of reads; the rest of such an answer
+comes with the next reply, so a record is only accepted with its own index, time and full cell
+table), and deduplicated when the
+battery drops its oldest block of 8 history records during the run.
 
 ## Dashboard
 
@@ -145,6 +170,7 @@ default `/dev/ttyUSB0`), `--interval`, `--gap` (minimum pause between commands, 
 
 ```
 pylontech_live.py         realtime reader (JSON lines on stdout)
+pylontech_export.py       logs for a warranty claim -> ZIP in BatteryView format
 pylontech_remote/         allow-list, console session, parsers, stack state
 nodered/                  Node-RED flow (Dashboard 2.0)
 tests/                    unit tests + captured console replies (python -m unittest discover -s tests -t .)

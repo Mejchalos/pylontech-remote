@@ -118,37 +118,39 @@ Battery  Volt     Curr     Tempr    Base State   Volt. State  Curr. State  Temp.
   Events SysErrCode`. Parse by header.
 - History starts with `Save data every 1800 S`.
 
-## BatteryView export format (sample supplied 2026-10-15, local only)
+## BatteryView export format (real files from this stack, cable on each module, 2026-10-16)
 
-Two files per module, named `<barcode>_<event|history>_<YYYYMMDDhhmmss>.txt`. Each is the **verbatim
-console transcript** (mixed `
-`/`
-` line endings kept) of:
+Two `.txt` files per module, named `<barcode>_<event|history>_<YYYYMMDDhhmmss>.txt` (the `.data`
+files next to them are BatteryView's own encrypted copies; support gets the `.txt` files).
 
-```
-info
-@ … info reply … Command completed successfully
-$$pylon_debug>stat
-@ … stat reply …
-$$pylon_debug>datalist event 0          (or: datalist history 0)
-@ … table …
-Command completed successfully
-$$
-pylon_debug>
-```
+- event file: `info`, `stat`, `pwr`, `datalist event 0`; history file: `info`, `stat`,
+  `datalist history 0`.
+- `info`, `stat`, `pwr` are the console bytes as received. The `datalist` part is rewritten with
+  CRLF line ends; where the console paged, a line of 50 spaces remains — before rows 15, 31, 47, …
+  (every 16 rows). History starts with `Save data every 1800 S`.
+- The prompt between commands is often cut (`pylon_debstat`, `pylon_d`): the files are not
+  byte-stable even between two BatteryView downloads. One of the eight files (M2 history) was
+  broken (`info` twice, no table) and nobody noticed.
+- On a module's own console the prompt is `pylon>`, `pwr` prints that module's detail
+  (`CFetState`, `Power  N`, voltage, statuses, protections; `Charge Sec.` / `Discharge Sec.`
+  depending on the state), and the table has values in Rec_chg/dsg_cur, Sys_Rec_chg/dsg_cur
+  (always `0 / 0` on slaves) and ID Cur (always 0 on slaves).
 
-No `Press [Enter]` text appears. The console sends `
-Press [Enter] to be continued,other key
-to exit` + 50 spaces + `` before the next row; BatteryView's file has `
-` + 50 spaces +
-`
-` instead, and table rows end in `
-` where the console sends `
-`. Matching the
-file byte for byte needs a BatteryView export from this stack (firmware B69.25) to compare.
-BatteryView reads the module the cable is plugged into (`Device address : 1`). Producing the same
-file for a **slave through the master** is not possible verbatim (no remote `datalist`); see
-ARCHITECTURE §4.11.
+Reproduced through the master (`pylontech_export.py`, compared with these files):
+- master: the `datalist` part is **byte-identical** after the same rewrite (86 events, 1795
+  history rows);
+- slaves: `info N` = the module's `info` (same 19 lines), `stat N` = its `stat` (same 120 fields),
+  `pwr N` = its `pwr` (same detail; `Charge Times` / `Charge Sec.` show 0 through the master);
+  table rows rebuilt from `data N …`: **all value columns identical** (298 rows compared);
+  Rec_chg/dsg_cur, Sys_Rec and ID Cur are `-` (not readable through the master).
+
+## Reading slaves record by record: cut replies
+
+About 1 % of `data N …` replies are cut short by the master: the truncated text is followed
+directly by `pylon_debug>` (no line break). **The rest of that answer arrives as the reply to the
+next command** (a bare Enter does not flush it). A reply is therefore only accepted when it carries
+the record asked for — the right `Item Index`, a `Time`, and the full cell table — otherwise it is
+rejected and the record read again (typically: cut reply, stray rest, then the good reply).
 
 ## `log`
 
