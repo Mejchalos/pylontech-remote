@@ -1,7 +1,8 @@
-# pylontech-rs232-venus
+# pylontech-remote
 
-Remote access to **Pylontech** battery logs and live data on a **Victron Cerbo GX / Venus OS**,
-through the RS232 console of the battery's master module and a Node-RED dashboard.
+Pylontech BatteryView-style logs and live view on a **Victron Cerbo GX / Venus OS**, in Node-RED:
+remote access to **Pylontech** battery logs and live data through the RS232 console of the
+battery, without a technician on site.
 
 - **Logs for a warranty claim** — the event and history logs as the files Pylontech BatteryView
   saves, as a ZIP from the dashboard: of the module the cable is plugged into (verbatim), or of
@@ -205,7 +206,7 @@ nothing else holds the port. `python3 pylontech_live.py --once` prints the error
 
 ## Credits
 
-Original project **pylontech-rs232-venus** by **Martin (tejno)** — reader, installer and the
+Original project [**pylontech-rs232-venus**](https://github.com/tejno/pylontech-rs232-venus) by **Martin (tejno)** — reader, installer and the
 dashboard widget this project builds on. If it saved you time, support him:
 [![Ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/tejnoo) → **[ko-fi.com/tejnoo](https://ko-fi.com/tejnoo)**
 
