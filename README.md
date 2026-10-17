@@ -29,7 +29,7 @@ the Cerbo unattended for years, through Venus OS updates. Not there yet:
 |---|---|
 | USB adapter | The original project was built with an **FTDI** (FT232R) adapter. This version is developed and tested with a **CH340** adapter (udev rule bound to the USB socket). Moving back to FTDI (rule bound to the adapter's serial number) is planned. |
 | Venus OS updates | The udev rule is restored at every boot from `/data` (see [Keep Venus OS away from the port](#keep-venus-os-away-from-the-port)). Verified after a restart (the rule is in place before serial-starter starts; it no longer touches the port). Not yet verified across a Venus OS update. |
-| Installation | [Installer](#install) over SSH (`install.sh`) or [from a USB stick](#without-ssh-from-a-usb-stick) without SSH. Both used on one Cerbo so far, the USB stick also with the port held by Venus OS. |
+| Installation | [From a USB stick](#from-a-usb-stick-no-ssh) without SSH, or [over SSH](#over-ssh). Both used on one Cerbo so far, the USB stick also with the port held by Venus OS. Uninstall from a USB stick: not yet tested. |
 | Other batteries | Only tested on US3000C with firmware B69.25. Other models, firmwares and stacks still need testing; console output and relaying of the other modules may differ. |
 | Export of the connected module | Tested with the cable on the master. With the cable on another module: implemented, not yet tested on hardware. |
 
@@ -75,9 +75,29 @@ remove it. `/data/pylontech/boot.log` shows the result of the last boot.
 
 ## Install
 
-Requirements on the Cerbo: root SSH, Venus OS **Large** (Python 3 and pyserial included),
-Node-RED with **Dashboard 2.0** (`@flowfuse/node-red-dashboard`, from the palette manager).
-Plug the console cable into the Cerbo first. On the Cerbo, as root:
+Requirements on the Cerbo: Venus OS **Large** (Python 3 and pyserial included), Node-RED with
+**Dashboard 2.0** (`@flowfuse/node-red-dashboard`, installed from the Node-RED palette manager).
+Plug the console cable into the Cerbo first. Two ways, same result:
+
+### From a USB stick (no SSH)
+
+1. Download [`venus-runtime-pylontech-install.tar.gz`](https://github.com/Mejchalos/pylontech-remote/releases/latest/download/venus-runtime-pylontech-install.tar.gz)
+   from the [latest release](https://github.com/Mejchalos/pylontech-remote/releases/latest) and copy
+   it, unchanged, to the root of a FAT32 USB stick.
+2. Plug the stick into any free USB port of the Cerbo. About a minute later the program is
+   installed: Venus OS unpacks every `venus-runtime-*.tar.gz` from an inserted stick into `/data`
+   and runs its install hook as root, which runs `install.sh` without questions (the adapter is
+   configured when it is the only USB serial adapter that is not a Victron device).
+3. Remove the stick. On it: `pylontech-install-log.txt` with the result; the archive is renamed to
+   `….installed` so it runs only once. Remove the stick in any case: Venus OS also stores VRM log
+   backlog on inserted sticks.
+
+The same file updates an installation. The archives can also be built from the repository:
+`python venus/usb/build.py` (→ `dist/usb/`).
+
+### Over SSH
+
+On the Cerbo, as root:
 
 ```bash
 wget -O /tmp/pylontech-install.sh https://raw.githubusercontent.com/Mejchalos/pylontech-remote/main/install.sh
@@ -88,26 +108,30 @@ The installer checks the Cerbo, installs the program into `/data/pylontech`, fin
 adapter and asks before using it, sets up the boot hook, and reads the battery once to show the
 modules. Every change is shown before it is made; `--dry-run` only shows them. The same command
 updates an installation (settings, state and exports are kept); `--reconfigure` chooses the
-adapter again (another USB socket, a new cable).
-
-### Without SSH: from a USB stick
-
-Venus OS unpacks a `venus-runtime.tar.gz` from an inserted USB stick into `/data` and runs its
-install hook as root. Build the file with `python venus/usb/build.py` (→ `dist/usb/`), copy it to
-the root of a FAT32 USB stick, plug the console cable into the Cerbo first, then the stick into
-any free USB port. About a minute later the program is installed exactly as by `install.sh`
-(without questions; the adapter is configured when it is the only USB serial adapter that is not
-a Victron device). The result is in `/data/pylontech/install.log` and in
-`pylontech-install-log.txt` on the stick; the archive is renamed to `.installed` so it runs only
-once. Remove the stick afterwards (Venus OS also stores VRM log backlog on inserted sticks).
+adapter again (another USB socket, a new cable). Without internet on the Cerbo: copy the
+repository to it and run `sh install.sh --source <dir>`.
 
 ### Node-RED
 
-Then in Node-RED: Menu → **Import** → **Local** (library) → `pylontech-remote` → **Import** →
-**Deploy** (when updating, delete the old **Battery** tab first). Dashboard:
-`http://<cerbo-ip>:1880/dashboard/battery`.
+Menu → **Import** → **Local** (library) → `pylontech-remote` → **Import** → **Deploy** (when
+updating, delete the old **Battery** tab first). Dashboard: `http://<cerbo-ip>:1880/dashboard/battery`.
 
-To remove: `sh /data/pylontech/uninstall.sh`, then delete the **Battery** tab in Node-RED.
+### Internet
+
+Needed only to download the files and to install Dashboard 2.0 from the palette manager. The
+program, the USB stick installation, Live and the log exports work without internet on the Cerbo;
+the dashboard is then reachable on the local network.
+
+### Uninstall
+
+- USB stick: [`venus-runtime-pylontech-uninstall.tar.gz`](https://github.com/Mejchalos/pylontech-remote/releases/latest/download/venus-runtime-pylontech-uninstall.tar.gz),
+  the same way as the installation (log: `pylontech-uninstall-log.txt`). It removes the boot hook,
+  the udev rule and `/data/pylontech` including the exported logs, and stops Live if it runs.
+  Never put the install and the uninstall archive on the same stick.
+- SSH: `sh /data/pylontech/uninstall.sh` (asks before deleting `/data/pylontech`).
+
+Then delete the **Battery** tab in Node-RED. After the next restart Venus OS uses the USB adapter
+again: unplug the console cable from the battery before that.
 
 ---
 

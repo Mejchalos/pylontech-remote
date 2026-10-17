@@ -1,9 +1,10 @@
 #!/bin/sh
 # pylontech-remote uninstaller (installed as /data/pylontech/uninstall.sh). Run as root:
 #
-#   sh /data/pylontech/uninstall.sh [--dry-run]
+#   sh /data/pylontech/uninstall.sh [--dry-run] [--yes]
 #
-# Removes the boot hook and the udev rule, then (after asking) /data/pylontech with the exports.
+# Removes the boot hook and the udev rule, then (after asking; --yes: without asking)
+# /data/pylontech with the exports.
 # Delete the Battery tab in Node-RED yourself.
 
 BASE=/data/pylontech
@@ -13,13 +14,20 @@ RUN_RULE=/run/udev/rules.d/zz-pylontech-console.rules
 MARK_BEGIN='# >>> pylontech-remote'
 MARK_END='# <<< pylontech-remote'
 
-DRY=0
-[ "${1:-}" = "--dry-run" ] && DRY=1
+DRY=0; YES=0
+for a in "$@"; do
+    case "$a" in
+        --dry-run) DRY=1 ;;
+        --yes) YES=1 ;;
+        *) echo "unknown option: $a"; exit 2 ;;
+    esac
+done
 
 say() { printf '%s\n' "$*"; }
 die() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
 do_() { if [ "$DRY" = 1 ]; then say "   [dry-run] $*"; else say "   $*"; eval "$@" || die "failed: $*"; fi; }
 ask() {
+    [ "$YES" = 1 ] && return 0
     printf '%s [y/N] ' "$1"
     read -r answer < /dev/tty || return 1
     case "$answer" in y|Y|yes|a|A|ano) return 0 ;; esac
@@ -27,8 +35,12 @@ ask() {
 }
 
 [ "$(id -u)" = 0 ] || die "run as root"
-if ps | grep -v grep | grep -q -E 'pylontech_(live|export)\.py'; then
-    die "Live or a log export is running - stop it in the dashboard first"
+running=$(ps | grep -v grep | grep -E 'pylontech_(live|export)\.py' | awk '{ print $1 }')
+if [ -n "$running" ]; then
+    [ "$YES" = 1 ] || die "Live or a log export is running - stop it in the dashboard first"
+    say "Stopping Live / log export (pid $running)"
+    do_ "kill $running"
+    sleep 2
 fi
 
 say "Boot hook in $RCS"

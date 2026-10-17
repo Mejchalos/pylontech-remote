@@ -84,6 +84,8 @@ if [ -z "$SRC" ]; then
     tar -xzf "$TMP/src.tar.gz" -C "$TMP" || die "cannot unpack"
     SRC=$(find "$TMP" -mindepth 1 -maxdepth 1 -type d | sed -n 1p)
     ORIGIN="$REPO $BRANCH"
+elif [ -f "$SRC/VERSION" ]; then
+    ORIGIN=$(sed -n 1p "$SRC/VERSION")
 else
     ORIGIN="local copy $SRC"
 fi

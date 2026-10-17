@@ -1,9 +1,13 @@
-"""Build venus-runtime.tar.gz: install pylontech-remote from a USB stick, without SSH.
+"""Build the USB stick archives: install / uninstall pylontech-remote without SSH.
 
-    python venus/usb/build.py [OUTDIR]          (default: dist/usb)
+    python venus/usb/build.py [--version v0.1.0] [OUTDIR]      (default OUTDIR: dist/usb)
 
-Copy the file to the root of a USB stick (FAT32) and plug it into the Cerbo. Venus OS unpacks it
-into /data and runs rc/post-hook.sh as root, which runs install.sh without questions.
+  venus-runtime-pylontech-install.tar.gz     installs or updates (runs install.sh --yes)
+  venus-runtime-pylontech-uninstall.tar.gz   removes everything (runs uninstall.sh --yes)
+
+Copy one of them to the root of a FAT32 USB stick and plug it into the Cerbo. Venus OS unpacks
+every venus-runtime-*.tar.gz into /data and runs its rc/post-hook.sh as root
+(/etc/init.d/update-data.sh).
 """
 import io
 import os
@@ -11,56 +15,79 @@ import sys
 import tarfile
 import time
 
-ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-FILES = ['install.sh', 'uninstall.sh', 'venus/boot.sh', 'pylontech_live.py', 'pylontech_export.py',
-         'nodered/pylontech_flow.json'] + \
-        ['pylontech_remote/' + f for f in sorted(os.listdir(os.path.join(ROOT, 'pylontech_remote')))
-         if f.endswith('.py')]
+HERE = os.path.dirname(os.path.abspath(__file__))
+ROOT = os.path.dirname(os.path.dirname(HERE))
+PROGRAM = ['install.sh', 'uninstall.sh', 'venus/boot.sh', 'pylontech_live.py', 'pylontech_export.py',
+           'nodered/pylontech_flow.json'] + \
+          ['pylontech_remote/' + f for f in sorted(os.listdir(os.path.join(ROOT, 'pylontech_remote')))
+           if f.endswith('.py')]
 EXECUTABLE = ('.sh', 'pylontech_live.py', 'pylontech_export.py')
 
 
-def add(tar, name, data, mode):
-    info = tarfile.TarInfo(name)
-    info.size = len(data)
-    info.mode = mode
-    info.mtime = int(time.time())
-    info.uid = info.gid = 0
-    info.uname = info.gname = 'root'
-    tar.addfile(info, io.BytesIO(data))
+def read(rel):
+    with open(os.path.join(ROOT, rel), 'rb') as f:
+        data = f.read()
+    return data if rel.endswith('.json') else data.replace(b'\r\n', b'\n')
 
 
-def add_dir(tar, name):
-    info = tarfile.TarInfo(name)
-    info.type = tarfile.DIRTYPE
-    info.mode = 0o755
-    info.mtime = int(time.time())
-    info.uname = info.gname = 'root'
-    tar.addfile(info)
+class Archive(object):
+    def __init__(self, path):
+        self.tar = tarfile.open(path, 'w:gz', format=tarfile.GNU_FORMAT)
+        self.dirs = set()
+        self.now = int(time.time())
+
+    def _info(self, name):
+        info = tarfile.TarInfo(name)
+        info.mtime = self.now
+        info.uid = info.gid = 0
+        info.uname = info.gname = 'root'
+        return info
+
+    def add(self, name, data, mode):
+        parts = name.split('/')
+        for k in range(1, len(parts)):
+            d = '/'.join(parts[:k])
+            if d not in self.dirs:
+                info = self._info(d)
+                info.type = tarfile.DIRTYPE
+                info.mode = 0o755
+                self.tar.addfile(info)
+                self.dirs.add(d)
+        info = self._info(name)
+        info.size = len(data)
+        info.mode = mode
+        self.tar.addfile(info, io.BytesIO(data))
+
+    def close(self):
+        self.tar.close()
 
 
-def main(outdir):
+def build(outdir, version):
     os.makedirs(outdir, exist_ok=True)
-    path = os.path.join(outdir, 'venus-runtime.tar.gz')
-    with tarfile.open(path, 'w:gz', format=tarfile.GNU_FORMAT) as tar:
-        add_dir(tar, 'rc')
-        with open(os.path.join(ROOT, 'venus', 'usb', 'post-hook.sh'), 'rb') as f:
-            add(tar, 'rc/post-hook.sh', f.read().replace(b'\r\n', b'\n'), 0o755)
-        dirs = set()
-        for rel in FILES:
-            parts = ('pylontech-install/' + rel).split('/')
-            for k in range(1, len(parts)):
-                d = '/'.join(parts[:k])
-                if d not in dirs:
-                    add_dir(tar, d)
-                    dirs.add(d)
-            with open(os.path.join(ROOT, rel), 'rb') as f:
-                data = f.read()
-            if not rel.endswith('.json'):
-                data = data.replace(b'\r\n', b'\n')
-            add(tar, 'pylontech-install/' + rel, data, 0o755 if rel.endswith(EXECUTABLE) else 0o644)
+    stamp = '%s (%s)' % (version or 'development build', time.strftime('%Y-%m-%d'))
+
+    path = os.path.join(outdir, 'venus-runtime-pylontech-install.tar.gz')
+    a = Archive(path)
+    a.add('rc/post-hook.sh', read('venus/usb/post-hook.sh'), 0o755)
+    for rel in PROGRAM:
+        a.add('pylontech-install/' + rel, read(rel), 0o755 if rel.endswith(EXECUTABLE) else 0o644)
+    a.add('pylontech-install/VERSION', ('pylontech-remote %s, USB stick\n' % stamp).encode(), 0o644)
+    a.close()
     print(path)
-    return path
+
+    path = os.path.join(outdir, 'venus-runtime-pylontech-uninstall.tar.gz')
+    a = Archive(path)
+    a.add('rc/post-hook.sh', read('venus/usb/uninstall-hook.sh'), 0o755)
+    a.add('pylontech-uninstall/uninstall.sh', read('uninstall.sh'), 0o755)
+    a.close()
+    print(path)
 
 
 if __name__ == '__main__':
-    main(sys.argv[1] if len(sys.argv) > 1 else os.path.join(ROOT, 'dist', 'usb'))
+    args = sys.argv[1:]
+    version = None
+    if '--version' in args:
+        i = args.index('--version')
+        version = args[i + 1]
+        del args[i:i + 2]
+    build(args[0] if args else os.path.join(ROOT, 'dist', 'usb'), version)
