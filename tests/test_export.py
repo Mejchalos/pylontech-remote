@@ -224,6 +224,44 @@ class ExporterTest(unittest.TestCase):
         m3 = [v for k, v in ex.files.items() if k.startswith('X00000000TEST0003_history')][0]
         self.assertEqual(len(self.rows(m3, b'datalist history 0')), 12)
 
+    def test_connected_module_is_read_verbatim(self):
+        ex, fake = self.make(connected=3)
+        stamp, battery_time = ex.run_connected()
+        self.assertEqual(battery_time, '')                         # a module's own pwr has no time
+        self.assertEqual(sorted(ex.files), ['X00000000TEST0003_event_%s.txt' % stamp,
+                                            'X00000000TEST0003_history_%s.txt' % stamp])
+        cmds = [w.decode().strip() for w in fake.written]
+        self.assertEqual([c for c in cmds if c], ['info', 'stat', 'pwr', 'datalist event 0', 'datalist history 0'])
+        self.assertEqual(fake.data_commands, [])
+        event = ex.files['X00000000TEST0003_event_%s.txt' % stamp]
+        self.assertTrue(event.startswith(b'info'))
+        self.assertIn(b'CFetState', event)                         # the module's own pwr detail
+        self.assertIn(b'Command completed successfully\r\n$$\r\npylon_debug>\r\n', event)
+        self.assertNotIn(b'[reconstructed', event)
+        self.assertEqual(ex.summary[0]['module'], 3)
+        self.assertIn(b'device address 3', ex.readme(stamp, battery_time))
+
+    def test_connected_to_the_master(self):
+        ex, fake = self.make(connected=1)
+        stamp, battery_time = ex.run_connected()
+        self.assertEqual(stamp, '20261015202924')                 # battery time from the stack pwr
+        self.assertEqual(len(ex.files), 2)
+        self.assertTrue(all(k.startswith('X00000000TEST0001_') for k in ex.files))
+
+    def test_module_zips_are_kept_apart_from_stack_zips(self):
+        import pylontech_export
+        tmp = tempfile.mkdtemp()
+        try:
+            pylontech_export.write_zip(tmp, '1', {}, {}, b'', keep=5)
+            for k in range(4):
+                pylontech_export.write_zip(tmp, str(k), {}, {}, b'', keep=3,
+                                           prefix='pylontech_module_X%d_' % k)
+            names = sorted(os.listdir(tmp))
+            self.assertIn('pylontech_logs_1.zip', names)
+            self.assertEqual(len([n for n in names if n.startswith('pylontech_module_')]), 3)
+        finally:
+            shutil.rmtree(tmp)
+
     def test_zip(self):
         import pylontech_export
         ex, _ = self.make()

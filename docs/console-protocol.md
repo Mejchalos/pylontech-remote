@@ -26,7 +26,7 @@ All are read-only. Every other command is refused by `pylontech_remote/allowlist
 | `stat [N]` | lifetime counters (~120); `Data Items` = event records, `HisData Items` = history records |
 | `config` | protection thresholds |
 | `data [N] event\|history I` | one stored record of module N (default: the master) |
-| `datalist event\|history I` | all records from `I` as a table — master only |
+| `datalist event\|history I` | all records from `I` as a table — of the module whose console this is (not relayed) |
 | `log` | the master's text log, last 32 entries |
 
 The module number goes right after the command (`data 2 history 15`). The `help` text does not
@@ -69,7 +69,9 @@ other module (`ID Cur`). All other columns follow from the matching `data` recor
 
 ## Reading the other modules through the master
 
-`datalist` works for the master only. Other modules are read record by record with
+`datalist` is not relayed: through the master it lists only the master's records. Other
+modules are read either on their own console (cable moved, as BatteryView does) or record by
+record through the master with
 `data N event|history I` (~0.6 s per record, relayed by the master).
 
 About 1 % of these replies are cut short by the master: the prompt follows the truncated text

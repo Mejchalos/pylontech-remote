@@ -1,7 +1,14 @@
 #!/usr/bin/env python3
 """Download the battery logs for a warranty claim: one ZIP in BatteryView's file format.
 
-For every module of the stack: `<barcode>_event_<stamp>.txt` and `<barcode>_history_<stamp>.txt`
+Two modes:
+- whole stack (default): every module through the master's console. The master's files are
+  verbatim; the other modules' tables are rebuilt from their records (`data N ...`).
+- --connected: only the module the cable is plugged into, verbatim like BatteryView
+  (`info`, `stat`, `pwr`, `datalist event 0`, `datalist history 0`). Move the cable from module
+  to module for a complete set.
+
+Per module `<barcode>_event_<stamp>.txt` and `<barcode>_history_<stamp>.txt`
 (see pylontech_remote/export.py), plus README.txt and raw/ with every console reply verbatim.
 
 Progress, the result and errors are printed as JSON lines on stdout:
@@ -12,7 +19,7 @@ Progress, the result and errors are printed as JSON lines on stdout:
 
 Only allow-listed read commands are sent. Holds the port for the whole run (stop Live first).
 
-  python3 pylontech_export.py [--gap 0.2] [--outdir /data/pylontech/exports]
+  python3 pylontech_export.py [--connected] [--gap 0.2] [--outdir /data/pylontech/exports]
 """
 import argparse
 import hashlib
@@ -30,6 +37,7 @@ from pylontech_remote import export, parsers                     # noqa: E402
 from pylontech_remote.session import ConsoleSession, ConsoleError  # noqa: E402
 
 RETRIES = 5
+CRLF = '\r\n'
 _stop = False
 
 
@@ -64,6 +72,7 @@ class Exporter(object):
         self.records_total = 0
         self.records_done = 0
         self.started = clock()
+        self.mode = 'stack'
 
     # -- console -----------------------------------------------------------------------------
     def unique_barcode(self, barcode, n):
@@ -113,19 +122,25 @@ class Exporter(object):
                   records_total=self.records_total, elapsed_s=int(elapsed), eta_s=eta)
         emit(kw)
 
-    # -- master: verbatim, like BatteryView ----------------------------------------------------
+    # -- verbatim, like BatteryView ----------------------------------------------------------
     def master(self, stamp):
         """Returns False when this firmware has no `datalist` (then module 1 is read like a slave)."""
         self.progress(step='master', module=1)
         info = self.run('info', expect='Barcode')
         stat = self.run('stat', expect='CYCLE Times')
         pwr = self.run('pwr', expect='Power Volt')
+        return self.verbatim(1, info, stat, pwr, stamp, 'verbatim (datalist on the master)')
+
+    def verbatim(self, n, info, stat, pwr, stamp, source):
+        """`datalist event|history 0` of the module whose console this is; False without datalist."""
+        self.progress(step='datalist', module=n, kind='event')
         ev = self.run('datalist event 0', idle=10.0, total=120.0)
+        self.progress(step='datalist', module=n, kind='history')
         hi = self.run('datalist history 0', idle=10.0, total=600.0)
         complete = parsers.is_complete(ev.text) and parsers.is_complete(hi.text)
         if not complete or parsers.is_invalid(ev.text) or parsers.is_invalid(hi.text):
             return False
-        barcode = self.unique_barcode(parsers.parse_info(info.text).get('barcode'), 1)
+        barcode = self.unique_barcode(parsers.parse_info(info.text).get('barcode'), n)
         # BatteryView: event file = info, stat, pwr, datalist event; history = info, stat, datalist history
         self.files[export.file_name(barcode, 'event', stamp)] = (
             info.data + stat.data + pwr.data + export.batteryview_table(ev.data))
@@ -135,9 +150,9 @@ class Exporter(object):
                         (ev, 'datalist_event'), (hi, 'datalist_history')):
             self.raw['raw/%s_%s.txt' % (barcode, name)] = r.data
         st = parsers.parse_stat(stat.text)
-        self.summary.append({'module': 1, 'barcode': barcode,
+        self.summary.append({'module': n, 'barcode': barcode,
                              'fw': parsers.parse_info(info.text).get('fw'),
-                             'source': 'verbatim (datalist on the master)',
+                             'source': source,
                              'event': st.get('event_items'), 'history': st.get('history_items'),
                              'missing': {}})
         return True
@@ -240,7 +255,51 @@ class Exporter(object):
             self.slave(n, info, stat, pwr, st, stamp)
         return stamp, battery_time
 
+    # -- only the connected module ---------------------------------------------------------------
+    def run_connected(self):
+        """The module whose console the cable is plugged into, verbatim like BatteryView."""
+        self.mode = 'connected'
+        self.progress(step='connected')
+        info = self.run('info', expect='Barcode')
+        n = parsers.to_int(dict(parsers.parse_kv(info.text)).get('Device address')) or 0
+        self.progress(step='connected', module=n, barcode=parsers.parse_info(info.text).get('barcode'))
+        stat = self.run('stat', expect='CYCLE Times')
+        # the master prints the stack table, any other module its own detail
+        pwr = self.run('pwr', check=lambda t: parsers.is_reply_to(t, 'pwr') and
+                       ('Power Volt' in t or 'System Fault' in t))
+        rows = parsers.parse_pwr(pwr.text)
+        battery_time = (rows[0].get('time') if rows else None) or ''
+        digits = ''.join(ch for ch in battery_time if ch.isdigit())
+        stamp = digits if len(digits) == 14 else time.strftime('%Y%m%d%H%M%S', time.localtime(self.clock()))
+        source = 'verbatim (datalist on the connected module, device address %d)' % n
+        if not self.verbatim(n, info, stat, pwr, stamp, source):
+            raise ConsoleError('this module does not answer datalist')
+        return stamp, battery_time
+
     def readme(self, stamp, battery_time):
+        if self.mode != 'connected':
+            return self.readme_stack(stamp, battery_time)
+        m = self.summary[0]
+        return CRLF.join([
+            'Pylontech battery logs for a warranty claim',
+            '==========================================',
+            '',
+            'Created by pylontech-remote on a Victron Cerbo GX.',
+            'Cerbo time (UTC): %s' % time.strftime('%Y-%m-%d %H:%M:%S', time.gmtime()),
+            'Battery clock (battery local time): %s' % (battery_time or 'not shown by this module'),
+            '',
+            'Read on the console of the module itself (device address %d), as BatteryView does:' % m['module'],
+            '  %s_event_%s.txt    info + stat + pwr + datalist event 0' % (m['barcode'], stamp),
+            '  %s_history_%s.txt  info + stat + datalist history 0' % (m['barcode'], stamp),
+            'Console replies verbatim; the datalist tables stored the way BatteryView stores them',
+            '(CRLF lines, a line of spaces where the console paged).',
+            'raw/: every console reply exactly as received.',
+            '',
+            'Module: %s  fw %s  events %s  history %s' % (m['barcode'], m['fw'], m['event'], m['history']),
+            '',
+        ]).encode('ascii', errors='replace')
+
+    def readme_stack(self, stamp, battery_time):
         lines = [
             'Pylontech battery logs for a warranty claim',
             '==========================================',
@@ -277,12 +336,14 @@ class Exporter(object):
                 m['module'], m['barcode'], m['fw'], m['event'], m['history'], m['source'],
                 ('  MISSING %s' % m['missing']) if m['missing'] else ''))
         lines += ['', 'Read retries: %d' % self.retries, '']
-        return '\r\n'.join(lines).encode('ascii', errors='replace')
+        return CRLF.join(lines).encode('ascii', errors='replace')
 
 
-def write_zip(outdir, stamp, files, raw, readme, keep):
+def write_zip(outdir, stamp, files, raw, readme, keep, prefix='pylontech_logs_'):
+    """`<prefix><stamp>.zip`; the newest `keep` ZIPs with the same prefix are kept.
+    Whole stack: pylontech_logs_<stamp>.zip; one module: pylontech_module_<barcode>_<stamp>.zip."""
     os.makedirs(outdir, exist_ok=True)
-    name = 'pylontech_logs_%s.zip' % stamp
+    name = '%s%s.zip' % (prefix, stamp)
     path = os.path.join(outdir, name)
     tmp = path + '.tmp'
     with zipfile.ZipFile(tmp, 'w', zipfile.ZIP_DEFLATED) as z:
@@ -292,7 +353,9 @@ def write_zip(outdir, stamp, files, raw, readme, keep):
         for p in sorted(raw):
             z.writestr(p, raw[p])
     os.replace(tmp, path)
-    old = sorted(f for f in os.listdir(outdir) if f.startswith('pylontech_logs_') and f.endswith('.zip'))
+    kind = 'pylontech_module_' if prefix.startswith('pylontech_module_') else prefix
+    old = sorted((f for f in os.listdir(outdir) if f.startswith(kind) and f.endswith('.zip')),
+                 key=lambda f: (os.path.getmtime(os.path.join(outdir, f)), f))
     for f in old[:-keep] if keep > 0 else []:
         os.remove(os.path.join(outdir, f))
     return path, name
@@ -303,7 +366,10 @@ def main():
     ap.add_argument('--port', default=os.environ.get('PYLONTECH_PORT', '/dev/ttyUSB0'))
     ap.add_argument('--gap', type=float, default=0.2, help='minimum pause between commands (s)')
     ap.add_argument('--outdir', default='/data/pylontech/exports')
-    ap.add_argument('--keep', type=int, default=5, help='keep this many export ZIPs')
+    ap.add_argument('--connected', action='store_true',
+                    help='only the module the cable is plugged into, verbatim (datalist)')
+    ap.add_argument('--keep', type=int, default=None,
+                    help='keep this many ZIPs of the same kind (default: 5 stack, 30 single module)')
     ap.add_argument('--limit', type=int, default=None,
                     help='TEST ONLY: newest N records per slave table (the ZIP is marked incomplete)')
     a = ap.parse_args()
@@ -320,7 +386,7 @@ def main():
     t0 = time.time()
     ex = Exporter(session, limit=a.limit)
     try:
-        stamp, battery_time = ex.run_all()
+        stamp, battery_time = ex.run_connected() if a.connected else ex.run_all()
     except Cancelled:
         emit({'type': 'error', 'error': 'cancelled'})
         return 4
@@ -334,8 +400,12 @@ def main():
     for k, (command, attempt, reply) in enumerate(ex.failed):
         ex.raw['raw/failed/%02d_%s_try%d_%s.txt' % (k, command.replace(' ', '_'), attempt + 1,
                                                     reply.end_reason)] = reply.data
-    path, name = write_zip(a.outdir, stamp, ex.files, ex.raw, ex.readme(stamp, battery_time), a.keep)
-    emit({'type': 'done', 'file': path, 'name': name, 'size': os.path.getsize(path),
+    if a.connected:
+        prefix, keep = 'pylontech_module_%s_' % ex.summary[0]['barcode'], a.keep or 30
+    else:
+        prefix, keep = 'pylontech_logs_', a.keep or 5
+    path, name = write_zip(a.outdir, stamp, ex.files, ex.raw, ex.readme(stamp, battery_time), keep, prefix)
+    emit({'type': 'done', 'mode': ex.mode, 'file': path, 'name': name, 'size': os.path.getsize(path),
           'duration_s': int(time.time() - t0), 'retries': ex.retries, 'modules': ex.summary})
     return 0
 

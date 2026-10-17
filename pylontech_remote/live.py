@@ -56,6 +56,19 @@ NOMINAL_AH = {
 NOMINAL_AH_DEFAULT = 74.0
 
 
+# State columns of `pwr`: anything but "Normal" is an active warning or protection.
+_STATE_COLUMNS = (('Volt.St', 'Voltage'), ('Curr.St', 'Current'), ('Temp.St', 'Temperature'),
+                  ('B.V.St', 'Cell voltage'), ('B.T.St', 'Cell temperature'),
+                  ('M.T.St', 'MOSFET temperature'))
+
+
+def module_alarms(pwr_row):
+    """[[label, state], ...] for the state columns of a module's `pwr` row that are not Normal."""
+    raw = (pwr_row or {}).get('raw') or {}
+    return [[label, raw[col]] for col, label in _STATE_COLUMNS
+            if raw.get(col) not in (None, '', '-', 'Normal')]
+
+
 class StackState(object):
     def __init__(self, clock=time.time):
         self._clock = clock
@@ -211,6 +224,8 @@ class StackState(object):
             'last_hv_date': None,
             'hv_cells':     [],
             'state':        p.get('base_state'),
+            'volt_mv':      p.get('volt_mv'),
+            'alarms':       module_alarms(p),
             'pwr_age_s':    round(now - self.pwr_ts, 1) if (p and self.pwr_ts) else None,
             'cells_age_s':  round(now - self.cells_ts[n], 1) if n in self.cells_ts else None,
             'stats':        group_stats(stat.get('fields') or []),
@@ -229,9 +244,14 @@ class StackState(object):
             socs = [m for m in modules if m['soc_pct'] is not None]
             sohs = [m for m in modules if m['soh_pct'] is not None]
             temps = [m['avg_temp_c'] for m in modules if m['avg_temp_c'] is not None]
+            volts = [m['volt_mv'] for m in modules if m['volt_mv'] is not None]
+            volt_v = round(sum(volts) / len(volts) / 1000.0, 2) if volts else None
+            curr_a = round(sum(m['curr_a'] for m in modules), 2)
             cap = round(sum(caps), 1) if caps else None
             pack = {
-                'curr_a':      round(sum(m['curr_a'] for m in modules), 2),
+                'curr_a':      curr_a,
+                'volt_v':      volt_v,
+                'power_w':     round(volt_v * curr_a) if volt_v is not None else None,
                 'cap_ah':      cap,
                 'nominal_ah':  nom,
                 'soc_pct':     round(sum(m['soc_pct'] * m['nominal_ah'] for m in socs) /

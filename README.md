@@ -3,9 +3,9 @@
 Remote access to **Pylontech** battery logs and live data on a **Victron Cerbo GX / Venus OS**,
 through the RS232 console of the battery's master module and a Node-RED dashboard.
 
-- **Logs for a warranty claim** — one button downloads the event and history logs of every
-  module in the stack as the files Pylontech BatteryView saves, packed in one ZIP. Works through
-  VRM, without a technician on site.
+- **Logs for a warranty claim** — the event and history logs as the files Pylontech BatteryView
+  saves, as a ZIP from the dashboard: of the module the cable is plugged into (verbatim), or of
+  the whole stack through the master. Works through VRM, without a technician on site.
 - **Live view** — pack, modules and cells of the whole stack, updated every 8 s, plus the
   lifetime counters of each module.
 
@@ -93,21 +93,27 @@ To remove: delete the **Battery** tab in Node-RED, `rm -r /data/pylontech` and t
 
 ## Logs for a warranty claim
 
-Dashboard button **Export events and history logs** (or `python3 pylontech_export.py` on the Cerbo) reads
-the event and history logs of every module through the master's console and builds one ZIP in
-`/data/pylontech/exports/` (last 5 kept), downloadable from the dashboard:
+The **Warranty logs** card on the dashboard has two exports. Both write a ZIP to
+`/data/pylontech/exports/`, downloadable from the dashboard, with per module
+`<barcode>_event_<stamp>.txt` (`info`, `stat`, `pwr`, event table) and
+`<barcode>_history_<stamp>.txt` (`info`, `stat`, history table) — the files BatteryView saves —
+plus `README.txt` and `raw/` (every console reply as received). Live is paused meanwhile.
 
-- per module `<barcode>_event_<stamp>.txt` (`info`, `stat`, `pwr`, event table) and
-  `<barcode>_history_<stamp>.txt` (`info`, `stat`, history table) — the files BatteryView saves;
-- `README.txt` and `raw/` (every console reply as received).
+**Export connected module** (`python3 pylontech_export.py --connected`): the module the cable is
+plugged into, read on its own console exactly as BatteryView does (`info`, `stat`, `pwr`,
+`datalist event 0`, `datalist history 0`), ~2 min. The module is recognised by its `info`
+(device address and serial). For a complete set move the cable from module to module (Console
+port); the card lists every module exported so far. ZIP `pylontech_module_<barcode>_<stamp>.zip`,
+the last 30 kept.
 
-**Master module:** identical to BatteryView's files, ~2 min.
+**Export whole stack** (`python3 pylontech_export.py`): every module through the master's console,
+without moving the cable, ~1–1.5 h. ZIP `pylontech_logs_<stamp>.zip`, the last 5 kept.
 
-**Other modules:** the master does not relay their tables, so each table is rebuilt from the
-module's own records (`data N event|history <i>`). Every value column matches BatteryView's file
-of that module. `Rec_chg/dsg_cur`, `Sys_Rec_chg/dsg_cur` and `ID Cur` cannot be read through the
-master and are written as `-`; the table is marked as reconstructed. ~30 min per module; Live is
-paused meanwhile.
+- master: identical to BatteryView's files;
+- other modules: the master does not relay their tables, so each table is rebuilt from the
+  module's own records (`data N event|history <i>`). Every value column matches BatteryView's file
+  of that module. `Rec_chg/dsg_cur`, `Sys_Rec_chg/dsg_cur` and `ID Cur` cannot be read through
+  the master and are written as `-`; the table is marked as reconstructed. ~30 min per module.
 
 Every reply is checked; replies the master cut short (~1 %) are read again, and records the
 battery drops from its ring buffer during the run are handled. Details:
@@ -115,18 +121,26 @@ battery drops from its ring buffer during the run are handled. Details:
 
 ## Dashboard
 
-- **Start Live** / **Stop Live** buttons (the active one is filled): Live reads the stack
-  summary (`pwr`) and the cells of every module (`bat N`) every **8 s**; the whole page updates
-  at once. Model, serial, firmware, SOH, cycles and thresholds are
-  kept in `/data/pylontech/state/static.json`, so the page is complete from the first update.
-  Live switches itself off after **30 min** and frees the port.
-- **Click a module's header** to open its lifetime counters (`stat N`, ~120 values): alarms and
-  protections, operation, time in current / SOC / temperature ranges, stored records.
-- **BHV counter increases** noticed while the dashboard is watching (the exact alarm times are in
-  the event log).
-- Pack summary: SOC, current, temperature, capacity (Ah + kWh), SOH, cell spread.
-- Per module: model, serial, firmware, SOC, current, temperature, capacity, SOH, cycles, cells
-  with a colour bar using the battery's own thresholds.
+Dark page with a header and two buttons, **Start Live** / **Stop Live** (the active one is
+filled). Live needs the cable on the master. It reads the stack summary (`pwr`) and the cells of
+every module (`bat N`) every **8 s**; the whole page updates at once. Model, serial, firmware,
+SOH, cycles and thresholds are kept in `/data/pylontech/state/static.json`, so the page is
+complete from the first update. Live switches itself off after **30 min** and frees the port.
+
+- **Stack**: SOC (Ah, kWh), power, voltage, cell spread with the lowest and highest cell,
+  temperatures, SOH and cycles.
+- **Alerts**: module warnings and protections (`pwr` state columns), cells beyond the battery's
+  limits, large cell spread, temperature, SOC difference between modules, stale data.
+- **Cells**: every cell of the stack in one grid. Colour = deviation in mV from the average of the
+  whole stack, on a fixed scale (green within a few mV, then yellow, orange, red, violet from
+  80 mV), so a cell out of line stands out wherever it is. Switchable to deviation from the
+  module's average, cell SOC or temperature. A dot marks a balancing cell; a cell beyond the
+  BMS limit blinks.
+- **Modules**: state, alarm chips, SOC, current, voltage, cell range and spread, temperature,
+  capacity, SOH, cycles. **Click a module** to open its lifetime counters (`stat N`, ~120 values):
+  alarms and protections, operation, time in current / SOC / temperature ranges, stored records.
+
+The dark look is a style of this page only; the dashboard theme and other pages are not changed.
 
 Options (`python3 pylontech_live.py --help`): `--port` (or env `PYLONTECH_PORT`, default
 `/dev/ttyUSB0`), `--interval`, `--gap`, `--max-minutes`, `--once`, `--state-file`.

@@ -37,6 +37,10 @@ class LiveRunnerTest(unittest.TestCase):
         self.assertEqual(m['cycles'], 216)
         self.assertEqual(snap['thresholds']['bhv_mv'], 3600)
         self.assertIsNotNone(snap['pack']['soc_pct'])
+        self.assertEqual(m['volt_mv'], 49697)
+        self.assertEqual(m['alarms'], [])
+        self.assertAlmostEqual(snap['pack']['volt_v'], 49.70, places=2)
+        self.assertEqual(snap['pack']['power_w'], round(snap['pack']['volt_v'] * snap['pack']['curr_a']))
         self.assertIs(snap['live'], False)
 
     def test_windows_start_with_pwr_and_rotate_cells(self):
@@ -81,6 +85,15 @@ class LiveRunnerTest(unittest.TestCase):
             self.assertEqual(len(self.out), i + 1)
             snap = self.out[-1]
             self.assertEqual([m['n_cells'] for m in snap['modules']], [15, 15, 15, 15])
+
+
+class ModuleAlarmsTest(unittest.TestCase):
+    def test_states_other_than_normal_are_alarms(self):
+        from pylontech_remote.live import module_alarms
+        row = {'raw': {'Volt.St': 'Normal', 'Curr.St': 'Normal', 'Temp.St': 'Normal',
+                       'B.V.St': 'High', 'B.T.St': 'Normal', 'M.T.St': '-'}}
+        self.assertEqual(module_alarms(row), [['Cell voltage', 'High']])
+        self.assertEqual(module_alarms({}), [])
 
 
 class SavedStaticDataTest(unittest.TestCase):

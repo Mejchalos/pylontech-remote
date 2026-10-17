@@ -14,8 +14,9 @@ def _time(module, kind, k):
 
 
 class FakeStack(FakeConsole):
-    def __init__(self, counts=None, drop_after=None, n_modules=4, **kw):
+    def __init__(self, counts=None, drop_after=None, n_modules=4, connected=1, **kw):
         FakeConsole.__init__(self, n_modules=n_modules, **kw)
+        self.connected = connected            # the module whose console the cable is plugged into
         counts = counts or {'event': 5, 'history': 12}
         # records[module][kind] = list of serial numbers k (oldest first)
         self.records = dict((m, dict((kind, list(range(c))) for kind, c in counts.items()))
@@ -25,6 +26,11 @@ class FakeStack(FakeConsole):
         self.data_commands = []
 
     def answer(self, command):
+        if self.connected != 1 and command in ('info', 'stat', 'pwr'):
+            # on another module's own console these describe that module (pwr: its detail)
+            n = self.connected
+            out = self.answer('%s %d' % (command, n))
+            return out.replace(('%s %d' % (command, n)).encode(), command.encode(), 1)
         m = re.match(r'^data(?: (\d+))? (event|history) (\d+)$', command)
         if m:
             module, kind, i = int(m.group(1) or 1), m.group(2), int(m.group(3))
