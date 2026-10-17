@@ -68,6 +68,13 @@ def port_holders(port):
     return found
 
 
+def default_port():
+    """$PYLONTECH_PORT, else /dev/ttyPYLON (the installer's fixed name), else /dev/ttyUSB0."""
+    if os.environ.get('PYLONTECH_PORT'):
+        return os.environ['PYLONTECH_PORT']
+    return '/dev/ttyPYLON' if os.path.exists('/dev/ttyPYLON') else '/dev/ttyUSB0'
+
+
 def open_serial(port, baud):
     import serial
     s = serial.Serial()

@@ -25,7 +25,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from pylontech_remote import parsers                      # noqa: E402
 from pylontech_remote.live import StackState              # noqa: E402
-from pylontech_remote.session import ConsoleSession, ConsoleError   # noqa: E402
+from pylontech_remote.session import ConsoleSession, ConsoleError, default_port   # noqa: E402
 
 STATIC_REFRESH_S = 600
 MAX_FAILURES = 3
@@ -185,7 +185,7 @@ class Runner(object):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument('--port', default=os.environ.get('PYLONTECH_PORT', '/dev/ttyUSB0'))
+    ap.add_argument('--port', default=default_port())
     ap.add_argument('--interval', type=float, default=8.0,
                     help='seconds per cycle (pwr + all cells takes ~7.5 s with --gap 1.2)')
     ap.add_argument('--gap', type=float, default=1.2, help='minimum pause between commands (s)')

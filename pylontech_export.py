@@ -34,7 +34,7 @@ import zipfile
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from pylontech_remote import export, parsers                     # noqa: E402
-from pylontech_remote.session import ConsoleSession, ConsoleError  # noqa: E402
+from pylontech_remote.session import ConsoleSession, ConsoleError, default_port  # noqa: E402
 
 RETRIES = 5
 CRLF = '\r\n'
@@ -363,7 +363,7 @@ def write_zip(outdir, stamp, files, raw, readme, keep, prefix='pylontech_logs_')
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument('--port', default=os.environ.get('PYLONTECH_PORT', '/dev/ttyUSB0'))
+    ap.add_argument('--port', default=default_port())
     ap.add_argument('--gap', type=float, default=0.2, help='minimum pause between commands (s)')
     ap.add_argument('--outdir', default='/data/pylontech/exports')
     ap.add_argument('--connected', action='store_true',

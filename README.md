@@ -28,8 +28,8 @@ the Cerbo unattended for years, through Venus OS updates. Not there yet:
 | Topic | State |
 |---|---|
 | USB adapter | The original project was built with an **FTDI** (FT232R) adapter. This version is developed and tested with a **CH340** adapter (udev rule bound to the USB socket). Moving back to FTDI (rule bound to the adapter's serial number) is planned. |
-| Venus OS updates | The udev rule lives in `/etc` and is **lost on a Venus OS update**; it has to be re-created by hand. Restoring it automatically at boot is planned. |
-| Installation | Manual (see [Install](#install)). A one-command installer is being prepared. |
+| Venus OS updates | The udev rule is restored at every boot from `/data` (see [Keep Venus OS away from the port](#keep-venus-os-away-from-the-port)). Verified after a restart (the rule is in place before serial-starter starts; it no longer touches the port). Not yet verified across a Venus OS update. |
+| Installation | [Installer](#install) (`install.sh`), new: used on one Cerbo so far. |
 | Other batteries | Only tested on US3000C with firmware B69.25. Other models, firmwares and stacks still need testing; console output and relaying of the other modules may differ. |
 | Export of the connected module | Tested with the cable on the master. With the cable on another module: implemented, not yet tested on hardware. |
 
@@ -60,29 +60,16 @@ Tested with: 4× US3000C, firmware B69.25.0.0, Venus OS v3.81, Cerbo GX.
 ### Keep Venus OS away from the port
 
 Venus OS's `serial-starter` probes every USB serial adapter as one of its own devices and writes
-probe traffic to the battery console. A udev rule must set `VE_SERVICE=ignore` for the adapter:
+probe traffic to the battery console. The installer adds a udev rule that sets
+`VE_SERVICE=ignore` for the console adapter only and gives it the fixed name `/dev/ttyPYLON`:
 
-- name the file so it sorts **after** `serial-starter.rules`, e.g.
-  `/etc/udev/rules.d/zz-pylontech-console.rules` (a `99-…` rule is processed first and then
-  overridden);
-- `/etc` is replaced by a Venus OS update — re-create the rule after updating (see
-  [Project status](#project-status)).
+- adapter with a serial number (FTDI): matched by the serial number, any USB socket;
+- adapter without one (CH340): matched by vendor/product and the USB socket.
 
-```
-# FTDI: by serial number   (udevadm info -q property -n /dev/ttyUSB0 | grep ID_SERIAL_SHORT)
-ACTION=="add", SUBSYSTEM=="tty", ENV{ID_SERIAL_SHORT}=="YOURSERIAL", ENV{VE_SERVICE}="ignore"
-# adapter without serial (e.g. CH340): by vendor/product + USB socket   (… | grep -E 'ID_VENDOR_ID|ID_MODEL_ID|ID_PATH')
-ACTION=="add", SUBSYSTEM=="tty", ENV{ID_VENDOR_ID}=="1a86", ENV{ID_MODEL_ID}=="7523", ENV{ID_PATH}=="platform-1c14400.usb-usb-0:1:1.0", ENV{VE_SERVICE}="ignore"
-```
-
-Apply it to that port only (serial-starter then releases the port by itself):
-
-```bash
-udevadm control --reload-rules
-udevadm trigger --action=add --subsystem-match=tty --sysname-match=ttyUSB0
-udevadm info -q property -n /dev/ttyUSB0 | grep VE_SERVICE     # → VE_SERVICE=ignore
-fuser /dev/ttyUSB0                                               # → nothing
-```
+The rule is kept in `/data/pylontech/udev.rules`. At every boot `/data/rcS.local` runs
+`/data/pylontech/boot.sh` (before Venus OS starts serial-starter), which puts it into
+`/run/udev/rules.d/` and applies it. Nothing in `/etc` is changed, so a Venus OS update does not
+remove it. `/data/pylontech/boot.log` shows the result of the last boot.
 
 ---
 
@@ -90,22 +77,24 @@ fuser /dev/ttyUSB0                                               # → nothing
 
 Requirements on the Cerbo: root SSH, Venus OS **Large** (Python 3 and pyserial included),
 Node-RED with **Dashboard 2.0** (`@flowfuse/node-red-dashboard`, from the palette manager).
+Plug the console cable into the Cerbo first. On the Cerbo, as root:
 
 ```bash
-# from a checkout of this repository on your PC
-ssh root@<cerbo-ip> 'mkdir -p /data/pylontech/app/pylontech_remote /data/pylontech/state /data/pylontech/exports && chown nodered:nodered /data/pylontech/state /data/pylontech/exports'
-scp pylontech_live.py pylontech_export.py root@<cerbo-ip>:/data/pylontech/app/
-scp pylontech_remote/*.py root@<cerbo-ip>:/data/pylontech/app/pylontech_remote/
-
-# test on the Cerbo: one full read, prints one JSON line
-ssh root@<cerbo-ip> 'python3 /data/pylontech/app/pylontech_live.py --once'
+wget -O /tmp/pylontech-install.sh https://raw.githubusercontent.com/Mejchalos/pylontech-remote/main/install.sh
+sh /tmp/pylontech-install.sh
 ```
 
-Then in Node-RED: Menu → **Import** `nodered/pylontech_flow.json` → **Deploy** (choose
-*Modified Flows* so other flows are not restarted) → open
+The installer checks the Cerbo, installs the program into `/data/pylontech`, finds the USB
+adapter and asks before using it, sets up the boot hook, and reads the battery once to show the
+modules. Every change is shown before it is made; `--dry-run` only shows them. The same command
+updates an installation (settings, state and exports are kept); `--reconfigure` chooses the
+adapter again (another USB socket, a new cable).
+
+Then in Node-RED: Menu → **Import** → **Local** (library) → `pylontech-remote` → **Import** →
+**Deploy** (when updating, delete the old **Battery** tab first). Dashboard:
 `http://<cerbo-ip>:1880/dashboard/battery`.
 
-To remove: delete the **Battery** tab in Node-RED, `rm -r /data/pylontech` and the udev rule.
+To remove: `sh /data/pylontech/uninstall.sh`, then delete the **Battery** tab in Node-RED.
 
 ---
 
@@ -181,7 +170,8 @@ pylontech_export.py       logs for a warranty claim -> ZIP
 pylontech_remote/         allow-list, console session, parsers, stack state, export format
 nodered/                  Node-RED flow (Dashboard 2.0)
 tests/                    unit tests with recorded console replies
-tools/console_capture.py  saves raw console replies (allow-listed commands only)
+install.sh, uninstall.sh  installer / uninstaller (run on the Cerbo)
+venus/boot.sh             boot hook: restores the udev rule (installed to /data/pylontech)
 docs/console-protocol.md  console commands, record formats, BatteryView file format
 ```
 
@@ -193,14 +183,15 @@ Tests: `python -m unittest discover -s tests -t .`
 
 **Live does not start / `port_open: … held by pid …`** — something else has the port:
 ```bash
-fuser /dev/ttyUSB0                                           # who holds it
-udevadm info -q property -n /dev/ttyUSB0 | grep VE_SERVICE   # must be "ignore"
+cat /data/pylontech/boot.log                                     # result of the last boot
+fuser /dev/ttyPYLON                                              # who holds the port
+udevadm info -q property -n /dev/ttyPYLON | grep VE_SERVICE      # must be "ignore"
 ```
-If `VE_SERVICE` is not `ignore`, the udev rule is missing (e.g. after a Venus OS update) or the
-cable is in a different USB socket than the rule expects.
+No `/dev/ttyPYLON`: the cable is unplugged, or (adapter without serial number) in another USB
+socket than at installation — run the installer with `--reconfigure`.
 
 **Battery returns nothing** — check that the cable is in the **Console** socket of the master and
-nothing else holds the port. `python3 pylontech_live.py --once` prints the error.
+nothing else holds the port. `python3 /data/pylontech/app/pylontech_live.py --once` prints the error.
 
 ---
 
