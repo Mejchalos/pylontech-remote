@@ -29,7 +29,7 @@ the Cerbo unattended for years, through Venus OS updates. Not there yet:
 |---|---|
 | USB adapter | The original project was built with an **FTDI** (FT232R) adapter. This version is developed and tested with a **CH340** adapter (udev rule bound to the USB socket). Moving back to FTDI (rule bound to the adapter's serial number) is planned. |
 | Venus OS updates | The udev rule is restored at every boot from `/data` (see [Keep Venus OS away from the port](#keep-venus-os-away-from-the-port)). Verified after a restart (the rule is in place before serial-starter starts; it no longer touches the port). Not yet verified across a Venus OS update. |
-| Installation | [Installer](#install) (`install.sh`), new: used on one Cerbo so far. |
+| Installation | [Installer](#install) over SSH (`install.sh`) or [from a USB stick](#without-ssh-from-a-usb-stick) without SSH. Both used on one Cerbo so far, the USB stick also with the port held by Venus OS. |
 | Other batteries | Only tested on US3000C with firmware B69.25. Other models, firmwares and stacks still need testing; console output and relaying of the other modules may differ. |
 | Export of the connected module | Tested with the cable on the master. With the cable on another module: implemented, not yet tested on hardware. |
 
@@ -89,6 +89,19 @@ adapter and asks before using it, sets up the boot hook, and reads the battery o
 modules. Every change is shown before it is made; `--dry-run` only shows them. The same command
 updates an installation (settings, state and exports are kept); `--reconfigure` chooses the
 adapter again (another USB socket, a new cable).
+
+### Without SSH: from a USB stick
+
+Venus OS unpacks a `venus-runtime.tar.gz` from an inserted USB stick into `/data` and runs its
+install hook as root. Build the file with `python venus/usb/build.py` (→ `dist/usb/`), copy it to
+the root of a FAT32 USB stick, plug the console cable into the Cerbo first, then the stick into
+any free USB port. About a minute later the program is installed exactly as by `install.sh`
+(without questions; the adapter is configured when it is the only USB serial adapter that is not
+a Victron device). The result is in `/data/pylontech/install.log` and in
+`pylontech-install-log.txt` on the stick; the archive is renamed to `.installed` so it runs only
+once. Remove the stick afterwards (Venus OS also stores VRM log backlog on inserted sticks).
+
+### Node-RED
 
 Then in Node-RED: Menu → **Import** → **Local** (library) → `pylontech-remote` → **Import** →
 **Deploy** (when updating, delete the old **Battery** tab first). Dashboard:
@@ -172,6 +185,7 @@ nodered/                  Node-RED flow (Dashboard 2.0)
 tests/                    unit tests with recorded console replies
 install.sh, uninstall.sh  installer / uninstaller (run on the Cerbo)
 venus/boot.sh             boot hook: restores the udev rule (installed to /data/pylontech)
+venus/usb/                install from a USB stick: install hook and the archive builder
 docs/console-protocol.md  console commands, record formats, BatteryView file format
 ```
 

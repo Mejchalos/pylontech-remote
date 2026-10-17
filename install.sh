@@ -43,7 +43,7 @@ say()  { printf '%s\n' "$*"; }
 step() { printf '\n== %s\n' "$*"; }
 die()  { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
 # run a command that changes something (only printed in --dry-run)
-do_()  { if [ "$DRY" = 1 ]; then say "   [dry-run] $*"; else eval "$@" || die "failed: $*"; fi; }
+do_()  { if [ "$DRY" = 1 ]; then say "   [dry-run] $*"; else say "   $*"; eval "$@" || die "failed: $*"; fi; }
 ask()  {
     [ "$YES" = 1 ] && return 0
     printf '%s [y/N] ' "$1"
@@ -175,12 +175,14 @@ $MARK_END"
         else
             awk -v b="$block" 'NR==1 && /^#!/ { print; print b; done=1; next } NR==1 { print b; done=1 } { print }' "$RCS" > "$RCS.new" \
                 && cat "$RCS.new" > "$RCS" && rm -f "$RCS.new" || die "cannot update $RCS"
+            say "   block added to $RCS"
         fi
     else
         if [ "$DRY" = 1 ]; then
             say "   [dry-run] create $RCS:"; printf '#!/bin/sh\n%s\n' "$block" | sed 's/^/      /'
         else
             printf '#!/bin/sh\n%s\n' "$block" > "$RCS" || die "cannot write $RCS"
+            say "   created $RCS"
         fi
     fi
     do_ "chmod 755 '$RCS'"

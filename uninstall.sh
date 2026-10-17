@@ -18,7 +18,7 @@ DRY=0
 
 say() { printf '%s\n' "$*"; }
 die() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
-do_() { if [ "$DRY" = 1 ]; then say "   [dry-run] $*"; else eval "$@" || die "failed: $*"; fi; }
+do_() { if [ "$DRY" = 1 ]; then say "   [dry-run] $*"; else say "   $*"; eval "$@" || die "failed: $*"; fi; }
 ask() {
     printf '%s [y/N] ' "$1"
     read -r answer < /dev/tty || return 1

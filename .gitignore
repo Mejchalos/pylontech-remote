@@ -2,4 +2,6 @@
 captures/
 # Local working notes - not part of the project
 notes/
+# Built USB install archive (venus/usb/build.py)
+dist/
 __pycache__/
