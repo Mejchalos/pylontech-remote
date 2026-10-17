@@ -18,6 +18,22 @@ Based on the original project by **Martin (tejno)** — see [Credits](#credits).
 
 ---
 
+## Project status
+
+**Work in progress.** Live view and both log exports work and are in use on one stack:
+4× US3000C, firmware B69.25.0.0, Cerbo GX with Venus OS v3.81. The goal is a setup that runs on
+the Cerbo unattended for years, through Venus OS updates. Not there yet:
+
+| Topic | State |
+|---|---|
+| USB adapter | The original project was built with an **FTDI** (FT232R) adapter. This version is developed and tested with a **CH340** adapter (udev rule bound to the USB socket). Moving back to FTDI (rule bound to the adapter's serial number) is planned. |
+| Venus OS updates | The udev rule lives in `/etc` and is **lost on a Venus OS update**; it has to be re-created by hand. Restoring it automatically at boot is planned. |
+| Installation | Manual (see [Install](#install)). A one-command installer is being prepared. |
+| Other batteries | Only tested on US3000C with firmware B69.25. Other models, firmwares and stacks still need testing; console output and relaying of the other modules may differ. |
+| Export of the connected module | Tested with the cable on the master. With the cable on another module: implemented, not yet tested on hardware. |
+
+---
+
 ## Safety
 
 - The battery only receives **read** commands. Every command passes one allow-list
@@ -48,7 +64,8 @@ probe traffic to the battery console. A udev rule must set `VE_SERVICE=ignore` f
 - name the file so it sorts **after** `serial-starter.rules`, e.g.
   `/etc/udev/rules.d/zz-pylontech-console.rules` (a `99-…` rule is processed first and then
   overridden);
-- `/etc` is replaced by a Venus OS update — re-create the rule after updating.
+- `/etc` is replaced by a Venus OS update — re-create the rule after updating (see
+  [Project status](#project-status)).
 
 ```
 # FTDI: by serial number   (udevadm info -q property -n /dev/ttyUSB0 | grep ID_SERIAL_SHORT)
@@ -149,11 +166,9 @@ Options (`python3 pylontech_live.py --help`): `--port` (or env `PYLONTECH_PORT`,
 
 ## Limitations
 
-- Tested on US3000C with firmware B69.25 only. Other models and firmwares may format the console
-  output differently or not relay the other modules' records.
-- The udev rule in `/etc` does not survive a Venus OS update.
 - The console has one user: Live and the log export never run at the same time, and BatteryView
   cannot be used on the same port while either runs.
+- Live needs the cable on the master; on another module's console it stops with an error.
 
 ---
 
