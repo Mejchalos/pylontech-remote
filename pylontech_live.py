@@ -12,6 +12,8 @@ Stops on SIGTERM/SIGINT, when stdout goes away, or after --max-minutes.
 
   python3 pylontech_live.py                 # live stream
   python3 pylontech_live.py --once          # one full snapshot, then exit
+  python3 pylontech_live.py --once --raw-dump FILE   # ... and every command with its raw reply
+                                                     # (to adapt the parsers to other firmwares)
 """
 import argparse
 import collections
@@ -25,7 +27,8 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from pylontech_remote import parsers                      # noqa: E402
 from pylontech_remote.live import StackState              # noqa: E402
-from pylontech_remote.session import ConsoleSession, ConsoleError, default_port   # noqa: E402
+from pylontech_remote.session import (ConsoleSession, ConsoleError, default_port,  # noqa: E402
+                                      missing_port_message)
 
 STATIC_REFRESH_S = 600
 MAX_FAILURES = 3
@@ -183,6 +186,25 @@ class Runner(object):
         return self.state.snapshot(live=False)
 
 
+def record(session, path):
+    """Append every command and its raw reply to `path` (diagnostics)."""
+    command = session.command
+    with open(path, 'w') as f:
+        f.write('pylontech-remote raw console replies, %s, port %s\n'
+                % (time.strftime('%Y-%m-%d %H:%M:%S'), session.port))
+
+    def recorded(cmd, *args, **kw):
+        reply = command(cmd, *args, **kw)
+        try:
+            with open(path, 'a') as f:
+                f.write('\n### %r  (end: %s, %.1f s, pages %d)\n%s\n'
+                        % (cmd, reply.end_reason, reply.duration_s, reply.pages, reply.text))
+        except OSError:
+            pass
+        return reply
+    session.command = recorded
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--port', default=default_port())
@@ -194,12 +216,19 @@ def main():
     ap.add_argument('--state-file', default=os.environ.get(
         'PYLONTECH_STATE', '/data/pylontech/state/static.json'),
         help="model/serial/firmware/statistics kept between runs ('' = do not keep)")
+    ap.add_argument('--raw-dump', metavar='FILE', help='write every command and its raw reply to FILE')
     a = ap.parse_args()
 
     signal.signal(signal.SIGTERM, _on_signal)
     signal.signal(signal.SIGINT, _on_signal)
 
+    missing = missing_port_message(a.port)
+    if missing:
+        emit(error_line(missing))
+        return 2
     session = ConsoleSession(a.port, gap=a.gap)
+    if a.raw_dump:
+        record(session, a.raw_dump)
     try:
         session.open()
     except Exception as e:     # port missing, busy or silent

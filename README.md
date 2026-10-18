@@ -28,9 +28,10 @@ the Cerbo unattended for years, through Venus OS updates. Not there yet:
 | Topic | State |
 |---|---|
 | USB adapter | The original project was built with an **FTDI** (FT232R) adapter. This version is developed and tested with a **CH340** adapter (udev rule bound to the USB socket). Moving back to FTDI (rule bound to the adapter's serial number) is planned. |
+| Cable found automatically | A new or replaced cable is found without the installer, a CH340 is checked whenever it appears ([A new or replaced cable](#a-new-or-replaced-cable)). Implemented and tested in simulation; not yet tested on hardware. |
 | Venus OS updates | The udev rule is restored at every boot from `/data` (see [Keep Venus OS away from the port](#keep-venus-os-away-from-the-port)). Verified after a restart (the rule is in place before serial-starter starts; it no longer touches the port). Not yet verified across a Venus OS update. |
-| Installation | [From a USB stick](#from-a-usb-stick-no-ssh) without SSH, or [over SSH](#over-ssh). Both used on one Cerbo so far, the USB stick also with the port held by Venus OS. Uninstall from a USB stick: not yet tested. |
-| Other batteries | Only tested on US3000C with firmware B69.25. Other models, firmwares and stacks still need testing; console output and relaying of the other modules may differ. |
+| Installation | [From a USB stick](#from-a-usb-stick-no-ssh) without SSH, or [over SSH](#over-ssh). USB stick used on two Cerbos (Venus OS v3.80 and v3.81), SSH on one. Uninstall from a USB stick: not yet tested. |
+| Other batteries | Only tested on US3000C with firmware B69.25. Other models, firmwares and stacks still need testing; console output and relaying of the other modules may differ. Every installation saves the battery's raw replies (`diagnostics.txt`) to adapt the program to them. |
 | Export of the connected module | Tested with the cable on the master. With the cable on another module: implemented, not yet tested on hardware. |
 
 ---
@@ -44,6 +45,9 @@ the Cerbo unattended for years, through Venus OS updates. Not there yet:
 - Nothing on the Victron side is changed (no ESS/DVCC/BMS settings, no D-Bus battery service). The
   BMS-CAN link is not touched.
 - The port is opened exclusively, with DTR/RTS low before opening.
+- Finding the cable sends only Enter, and only to a USB serial converter that is not a Victron
+  device and on which Venus OS has found no device; while such an adapter stays silent, at most
+  once an hour after the first hour ([details](#a-new-or-replaced-cable)).
 
 ---
 
@@ -71,13 +75,53 @@ The rule is kept in `/data/pylontech/udev.rules`. At every boot `/data/rcS.local
 `/run/udev/rules.d/` and applies it. Nothing in `/etc` is changed, so a Venus OS update does not
 remove it. `/data/pylontech/boot.log` shows the result of the last boot.
 
+### A new or replaced cable
+
+The program finds the cable itself (`pylontech_adopt.py`, started by `boot.sh` at boot and by a
+udev rule in `/run` whenever a USB serial adapter is plugged in). Only the battery's own answer
+counts: Enter is answered with the Pylontech prompt (`pylon>`, `pylon_debug>`). Timing alone never
+decides.
+
+**Cable missing** (`/dev/ttyPYLON`: no cable configured yet, or the cable was replaced). Venus OS
+first gets a head start of a minute (two at boot) to find its own devices. Then, for each
+adapter that may be the console:
+
+- skipped: Victron devices (VE.Direct, MK3, Victron RS485), anything that is not a USB serial
+  converter chip (FTDI, CH340, CP210x, PL2303 — so no 4G modems or GPS receivers), adapters
+  reserved by other programs, and adapters on which Venus OS has found a device (a D-Bus service
+  for that port, by name or by `/Mgmt/Connection`, e.g. an energy meter). These are never asked;
+- the others: Venus OS lets go of the adapter (its own `serial-starter/stop-tty.sh`), the adapter
+  gets **Enter only**, and the console is adopted (the udev rule above; the old rule is kept in
+  `/data/pylontech/backup/`). Any other adapter goes straight back to Venus OS (`start-tty.sh`).
+  An adapter that stays silent (battery off, cable not yet in the battery) is asked again every
+  10 min for the first hour, then once an hour, until the battery answers or the adapter is
+  unplugged or taken by Venus OS.
+
+**Cable bound to a USB socket** (CH340, no serial number). The rule matches any CH340 in that
+socket, so the adapter is checked whenever it appears (boot, plugged in):
+
+| Answer to Enter | Result |
+|---|---|
+| Pylontech prompt | confirmed |
+| silent (battery off, or e.g. a Modbus meter converter, which only answers its own protocol) | asked again every 2 min for 30 min, then given to Venus OS |
+| something else, twice | given to Venus OS at once |
+
+Given to Venus OS means the rule is moved to `/data/pylontech/backup/` and the search above takes
+over: an energy meter is then found by Venus OS and never touched again, the battery console is
+found again as soon as the battery answers. A cable with a serial number (FTDI) is not checked:
+its rule matches that one cable only.
+
+Each change is written to `/data/pylontech/adapter.log`. Timing: `pylontech_remote/adapters.py`.
+
 ---
 
 ## Install
 
-Requirements on the Cerbo: Venus OS **Large** (Python 3 and pyserial included), Node-RED with
-**Dashboard 2.0** (`@flowfuse/node-red-dashboard`, installed from the Node-RED palette manager).
-Plug the console cable into the Cerbo first. Two ways, same result:
+Requirements on the Cerbo: Venus OS **Large** (Python 3 and pyserial included), Node-RED switched
+on (Settings → Integrations) with **Dashboard 2.0** (`@flowfuse/node-red-dashboard`, installed from
+the Node-RED palette manager).
+Plug the console cable into the Cerbo first (or later: it is then
+[found automatically](#a-new-or-replaced-cable)). Two ways, same result:
 
 ### From a USB stick (no SSH)
 
@@ -86,11 +130,20 @@ Plug the console cable into the Cerbo first. Two ways, same result:
    it, unchanged, to the root of a FAT32 USB stick.
 2. Plug the stick into any free USB port of the Cerbo. About a minute later the program is
    installed: Venus OS unpacks every `venus-runtime-*.tar.gz` from an inserted stick into `/data`
-   and runs its install hook as root, which runs `install.sh` without questions (the adapter is
-   configured when it is the only USB serial adapter that is not a Victron device).
-3. Remove the stick. On it: `pylontech-install-log.txt` with the result; the archive is renamed to
-   `….installed` so it runs only once. Remove the stick in any case: Venus OS also stores VRM log
-   backlog on inserted sticks.
+   and runs its install hook as root, which runs `install.sh` without questions (the cable is
+   [found automatically](#a-new-or-replaced-cable)).
+3. Remove the stick. It is **reusable**: the archive stays on it, so the same stick installs the
+   next Cerbo. On the stick, per Cerbo (its VRM portal ID):
+   - `pylontech-results.txt`: one line per installation — date, Cerbo, result (`OK`,
+     `INSTALLED, BATTERY NOT REACHED YET`, `FAILED`);
+   - `pylontech-logs/<id>-install-log.txt`: the installer's output, newest run first;
+   - `pylontech-logs/<id>-diagnostics.txt`: the battery's raw replies (they contain the modules'
+     serial numbers).
+
+   Plugging the stick in again repeats the installation and the test (e.g. after fixing the
+   cable). Do not leave the stick in the Cerbo: Venus OS also stores VRM log backlog on inserted
+   sticks. A stick left in is processed again at boot; nothing is done then if this version is
+   already installed.
 
 The same file updates an installation. The archives can also be built from the repository:
 `python venus/usb/build.py` (→ `dist/usb/`).
@@ -104,17 +157,27 @@ wget -O /tmp/pylontech-install.sh https://raw.githubusercontent.com/Mejchalos/py
 sh /tmp/pylontech-install.sh
 ```
 
-The installer checks the Cerbo, installs the program into `/data/pylontech`, finds the USB
-adapter and asks before using it, sets up the boot hook, and reads the battery once to show the
-modules. Every change is shown before it is made; `--dry-run` only shows them. The same command
-updates an installation (settings, state and exports are kept); `--reconfigure` chooses the
-adapter again (another USB socket, a new cable). Without internet on the Cerbo: copy the
-repository to it and run `sh install.sh --source <dir>`.
+The installer checks the Cerbo, installs the program into `/data/pylontech`, lists the USB
+adapters and asks which one is the cable (Enter: find it automatically), sets up the boot hook,
+and reads the battery once to show the modules. Every change is shown before it is made;
+`--dry-run` only shows them. The same command updates an installation (settings, state and
+exports are kept); `--reconfigure` chooses the adapter again. Without internet on the Cerbo: copy
+the repository to it and run `sh install.sh --source <dir>`.
 
 ### Node-RED
 
 Menu → **Import** → **Local** (library) → `pylontech-remote` → **Import** → **Deploy** (when
-updating, delete the old **Battery** tab first). Dashboard: `http://<cerbo-ip>:1880/dashboard/battery`.
+updating, delete the old **Battery** tab first).
+
+Dashboard:
+- remotely: VRM → the installation → Venus OS Large → **Node-RED Dashboard 2.0**;
+- local network: `https://<cerbo-ip>:1881/dashboard/battery` (the Cerbo's own certificate: confirm
+  the browser's warning once).
+
+Like every Node-RED page on Venus OS, the dashboard has no password of its own: on the local
+network it is open to anyone who can reach the Cerbo; through VRM it needs the VRM login. The
+Node-RED editor is protected by the Cerbo's password (Settings → General → Access & security) —
+set one.
 
 ### Internet
 
@@ -126,7 +189,7 @@ the dashboard is then reachable on the local network.
 
 - USB stick: [`venus-runtime-pylontech-uninstall.tar.gz`](https://github.com/Mejchalos/pylontech-remote/releases/latest/download/venus-runtime-pylontech-uninstall.tar.gz),
   the same way as the installation (log: `pylontech-uninstall-log.txt`). It removes the boot hook,
-  the udev rule and `/data/pylontech` including the exported logs, and stops Live if it runs.
+  the udev rules and `/data/pylontech` including the exported logs, and stops Live if it runs.
   Never put the install and the uninstall archive on the same stick.
 - SSH: `sh /data/pylontech/uninstall.sh` (asks before deleting `/data/pylontech`).
 
@@ -186,8 +249,9 @@ complete from the first update. Live switches itself off after **30 min** and fr
 
 The dark look is a style of this page only; the dashboard theme and other pages are not changed.
 
-Options (`python3 pylontech_live.py --help`): `--port` (or env `PYLONTECH_PORT`, default
-`/dev/ttyUSB0`), `--interval`, `--gap`, `--max-minutes`, `--once`, `--state-file`.
+Options (`python3 pylontech_live.py --help`): `--port` (or env `PYLONTECH_PORT`; default
+`/dev/ttyPYLON` when installed, else `/dev/ttyUSB0`), `--interval`, `--gap`, `--max-minutes`,
+`--once`, `--state-file`, `--raw-dump FILE` (every command with its raw reply).
 
 ---
 
@@ -204,11 +268,12 @@ Options (`python3 pylontech_live.py --help`): `--port` (or env `PYLONTECH_PORT`,
 ```
 pylontech_live.py         live reader (JSON lines on stdout)
 pylontech_export.py       logs for a warranty claim -> ZIP
+pylontech_adopt.py        finds the console cable among the USB serial adapters
 pylontech_remote/         allow-list, console session, parsers, stack state, export format
 nodered/                  Node-RED flow (Dashboard 2.0)
 tests/                    unit tests with recorded console replies
 install.sh, uninstall.sh  installer / uninstaller (run on the Cerbo)
-venus/boot.sh             boot hook: restores the udev rule (installed to /data/pylontech)
+venus/boot.sh             boot hook: restores the udev rule, starts the cable search
 venus/usb/                install from a USB stick: install hook and the archive builder
 docs/console-protocol.md  console commands, record formats, BatteryView file format
 ```
@@ -226,10 +291,13 @@ fuser /dev/ttyPYLON                                              # who holds the
 udevadm info -q property -n /dev/ttyPYLON | grep VE_SERVICE      # must be "ignore"
 ```
 No `/dev/ttyPYLON`: the cable is unplugged, or (adapter without serial number) in another USB
-socket than at installation — run the installer with `--reconfigure`.
+socket than before. The search for it is in `/data/pylontech/adapter.log`;
+`python3 /data/pylontech/app/pylontech_adopt.py --list` shows the adapters and why each one is
+skipped.
 
 **Battery returns nothing** — check that the cable is in the **Console** socket of the master and
-nothing else holds the port. `python3 /data/pylontech/app/pylontech_live.py --once` prints the error.
+nothing else holds the port. `python3 /data/pylontech/app/pylontech_live.py --once` prints the error;
+with `--raw-dump /tmp/raw.txt` also every raw reply.
 
 ---
 

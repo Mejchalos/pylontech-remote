@@ -69,10 +69,23 @@ def port_holders(port):
 
 
 def default_port():
-    """$PYLONTECH_PORT, else /dev/ttyPYLON (the installer's fixed name), else /dev/ttyUSB0."""
+    """$PYLONTECH_PORT, else /dev/ttyPYLON (the installer's fixed name; always when installed, so
+    that another adapter is never used by mistake), else /dev/ttyUSB0."""
     if os.environ.get('PYLONTECH_PORT'):
         return os.environ['PYLONTECH_PORT']
-    return '/dev/ttyPYLON' if os.path.exists('/dev/ttyPYLON') else '/dev/ttyUSB0'
+    if os.path.exists('/dev/ttyPYLON') or os.path.isdir('/data/pylontech'):
+        return '/dev/ttyPYLON'
+    return '/dev/ttyUSB0'
+
+
+def missing_port_message(port):
+    """For the dashboard when the port does not exist, else None."""
+    if os.path.exists(port):
+        return None
+    if port == '/dev/ttyPYLON':
+        return ('battery console cable not connected (no /dev/ttyPYLON) - plug it in; it is found '
+                'automatically within a few minutes')
+    return 'port %s does not exist' % port
 
 
 def open_serial(port, baud):
@@ -107,6 +120,7 @@ class ConsoleSession(object):
         self._sleep = sleep
         self._ser = None
         self._last_end = None
+        self.greeting = None      # the reply to Enter when the session was opened
 
     # -- lifecycle -------------------------------------------------------------------------
     def open(self, check_holders=True, settle=1.0):
@@ -116,7 +130,7 @@ class ConsoleSession(object):
                 raise ConsoleError('port %s is held by pid %s' % (self.port, holders))
         self._ser = self._factory(self.port, self.baud)
         self._sleep(settle)
-        self.resync()
+        self.greeting = self.resync()
         return self
 
     def close(self):

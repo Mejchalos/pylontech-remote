@@ -18,10 +18,11 @@ import time
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(os.path.dirname(HERE))
 PROGRAM = ['install.sh', 'uninstall.sh', 'venus/boot.sh', 'pylontech_live.py', 'pylontech_export.py',
+           'pylontech_adopt.py',
            'nodered/pylontech_flow.json'] + \
           ['pylontech_remote/' + f for f in sorted(os.listdir(os.path.join(ROOT, 'pylontech_remote')))
            if f.endswith('.py')]
-EXECUTABLE = ('.sh', 'pylontech_live.py', 'pylontech_export.py')
+EXECUTABLE = ('.sh', 'pylontech_live.py', 'pylontech_export.py', 'pylontech_adopt.py')
 
 
 def read(rel):

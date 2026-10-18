@@ -6,16 +6,19 @@
 #
 # Installs or updates the program in /data/pylontech, keeps Venus OS's serial-starter away from
 # the battery console (udev rule restored at every boot from /data, so it survives Venus OS
-# updates) and prepares the Node-RED flow. Every change is shown before it is made.
+# updates) and prepares the Node-RED flow. A replaced cable is found automatically (boot.sh,
+# pylontech_adopt.py). Every change is shown before it is made.
 #
 # Options:
 #   --dry-run       show what would be done, change nothing
-#   --reconfigure   choose the USB adapter again
-#   --yes           no questions (fails if the adapter is not unambiguous)
+#   --reconfigure   choose the USB adapter again (or let it be found automatically)
+#   --yes           no questions; the cable is found automatically (the adapter that answers
+#                   Enter with the console prompt)
 #   --source DIR    install from an unpacked copy of the repository instead of downloading
 #   --branch NAME   download this branch (default: main)
 #
-# The battery only ever receives read commands (one test read at the end).
+# The battery only ever receives read commands (a test read at the end).
+# Exit code: 0 done, 1 failed (see the message), 3 installed but the battery did not answer.
 
 REPO=Mejchalos/pylontech-remote
 BRANCH=main
@@ -51,7 +54,19 @@ ask()  {
     case "$answer" in y|Y|yes|a|A|ano) return 0 ;; esac
     return 1
 }
-prop() { udevadm info -q property -n "$1" 2>/dev/null | sed -n "s/^$2=//p"; }
+# what the Cerbo sees on USB (for the log when the cable is not found)
+usb_report() {
+    say "USB devices:"
+    for u in /sys/bus/usb/devices/*; do
+        [ -f "$u/idVendor" ] || continue
+        [ "$(cat "$u/idVendor")" = 1d6b ] && continue     # the Cerbo's own USB hubs
+        drv=''
+        for i in "$u"/*:*; do [ -L "$i/driver" ] && drv="$drv $(basename "$(readlink "$i/driver")")"; done
+        say "   $(basename "$u")  $(cat "$u/idVendor"):$(cat "$u/idProduct")  $(cat "$u/manufacturer" 2>/dev/null) $(cat "$u/product" 2>/dev/null)  driver:${drv:- none}"
+    done
+    say "Kernel messages about USB (last 20):"
+    dmesg | grep -i -E 'usb|tty|ch34|ftdi|pl2303|cp210' | tail -n 20 | sed 's/^/   /'
+}
 
 [ "$DRY" = 1 ] && say "*** DRY RUN: nothing will be changed ***"
 
@@ -69,9 +84,16 @@ if [ -d "$NODERED/node_modules/@flowfuse/node-red-dashboard" ]; then
 else
     say "WARNING: Node-RED Dashboard 2.0 not installed - install @flowfuse/node-red-dashboard from the palette manager"
 fi
-if ps | grep -v grep | grep -q -E 'pylontech_(live|export)\.py'; then
-    die "Live or a log export is running - stop it in the dashboard first"
+running=$(ps | grep -v grep | grep -E 'pylontech_(live|export)\.py' | awk '{ print $1 }')
+if [ -n "$running" ]; then
+    [ "$YES" = 1 ] || die "Live or a log export is running - stop it in the dashboard first"
+    say "Stopping Live / log export (pid $running); start Live again in the dashboard afterwards"
+    do_ "kill $running"
+    [ "$DRY" = 1 ] || sleep 2
 fi
+# a cable search in the background (pylontech_adopt.py) is started again below if still needed
+running=$(ps | grep -v grep | grep -E 'pylontech_adopt\.py' | awk '{ print $1 }')
+[ -n "$running" ] && do_ "kill $running"
 
 # -- 2. get the program ------------------------------------------------------------------------
 step "Getting pylontech-remote"
@@ -89,7 +111,7 @@ elif [ -f "$SRC/VERSION" ]; then
 else
     ORIGIN="local copy $SRC"
 fi
-for f in pylontech_live.py pylontech_export.py pylontech_remote/session.py venus/boot.sh uninstall.sh nodered/pylontech_flow.json; do
+for f in pylontech_live.py pylontech_export.py pylontech_adopt.py pylontech_remote/session.py venus/boot.sh uninstall.sh nodered/pylontech_flow.json; do
     [ -f "$SRC/$f" ] || die "$SRC/$f missing - not a pylontech-remote source"
 done
 say "source: $SRC"
@@ -99,9 +121,9 @@ step "Installing into $BASE"
 if [ -d "$BASE/app" ]; then say "existing installation found - updating the program, keeping settings, state and exports"; fi
 do_ "mkdir -p '$BASE/app/pylontech_remote' '$BASE/state' '$BASE/exports' '$BASE/backup'"
 do_ "rm -rf '$BASE/app/pylontech_remote/__pycache__' '$BASE/app/__pycache__'"
-do_ "cp '$SRC/pylontech_live.py' '$SRC/pylontech_export.py' '$BASE/app/'"
+do_ "cp '$SRC/pylontech_live.py' '$SRC/pylontech_export.py' '$SRC/pylontech_adopt.py' '$BASE/app/'"
 do_ "cp '$SRC'/pylontech_remote/*.py '$BASE/app/pylontech_remote/'"
-do_ "chmod 755 '$BASE/app/pylontech_live.py' '$BASE/app/pylontech_export.py'"
+do_ "chmod 755 '$BASE/app/pylontech_live.py' '$BASE/app/pylontech_export.py' '$BASE/app/pylontech_adopt.py'"
 do_ "cp '$SRC/venus/boot.sh' '$SRC/uninstall.sh' '$BASE/'"
 do_ "chmod 755 '$BASE/boot.sh' '$BASE/uninstall.sh'"
 do_ "cp '$SRC/nodered/pylontech_flow.json' '$BASE/pylontech_flow.json'"
@@ -115,50 +137,33 @@ fi
 
 # -- 4. the console adapter --------------------------------------------------------------------
 step "USB adapter of the battery console"
+# Without a choice here the cable is found automatically after the boot hook is in place (step 6):
+# the adapter that answers Enter with the console prompt. A replaced cable is found the same way.
+python3 "$SRC/pylontech_adopt.py" --list
 if [ -f "$BASE/udev.rules" ] && [ "$RECONF" = 0 ]; then
-    say "already configured (use --reconfigure to choose again):"
+    say "configured (use --reconfigure to choose again):"
     sed 's/^/   /' "$BASE/udev.rules"
+elif [ "$YES" = 1 ]; then
+    say "the cable is found automatically below"
 else
-    n=0; list=''
-    for d in /sys/class/tty/ttyUSB* /sys/class/tty/ttyACM*; do
-        [ -e "$d" ] || continue
-        dev=/dev/$(basename "$d")
-        n=$((n + 1)); list="$list $dev"
-        model=$(prop "$dev" ID_MODEL); drv=$(prop "$dev" ID_USB_DRIVER); serial=$(prop "$dev" ID_SERIAL_SHORT)
-        service=$(prop "$dev" VE_SERVICE); holder=$(fuser "$dev" 2> /dev/null)
-        note=''
-        case "$model" in VE_Direct_cable|MK3-USB_Interface|USB-RS485_Cable|USB485_Iso_stick) note=' <- Victron device, not the battery console' ;; esac
-        say "  $n) $dev  $drv  $model  serial=${serial:-none}  usb=$(prop "$dev" ID_PATH)  Venus OS: ${service:-?}${holder:+  in use by pid$holder}$note"
-    done
-    [ "$n" -gt 0 ] || die "no USB serial adapter found - plug in the console cable and run again"
-    if [ "$n" = 1 ]; then
-        choice=1
-    elif [ "$YES" = 1 ]; then
-        die "$n adapters found - run without --yes and choose one"
-    else
-        printf 'Which one is the battery console cable? [1-%s] ' "$n"
-        read -r choice < /dev/tty || die "no answer"
+    printf 'Which one is the battery console cable? [number, Enter = find it automatically] '
+    read -r choice < /dev/tty || choice=''
+    if [ -f "$BASE/udev.rules" ]; then
+        do_ "cp -p '$BASE/udev.rules' '$BASE/backup/udev.rules.$(date +%Y%m%d%H%M%S)'"
+        do_ "rm -f '$BASE/udev.rules' '$BASE/udev.match'"
     fi
-    dev=$(echo $list | cut -d' ' -f"$choice")
-    [ -n "$dev" ] || die "invalid choice"
-    serial=$(prop "$dev" ID_SERIAL_SHORT); path=$(prop "$dev" ID_PATH)
-    if [ -n "$serial" ]; then
-        # adapter with a serial number (FTDI): the rule follows the cable to any USB socket
-        rule="ACTION==\"add\", SUBSYSTEM==\"tty\", ENV{ID_SERIAL_SHORT}==\"$serial\", ENV{VE_SERVICE}=\"ignore\", SYMLINK+=\"ttyPYLON\""
-        match="ID_SERIAL_SHORT=$serial"
-        say "$dev has serial number $serial: the rule follows this cable to any USB socket."
+    if [ -n "$choice" ]; then
+        dev=$(ls /sys/class/tty | grep '^ttyUSB' | sort | sed -n "${choice}p")
+        [ -n "$dev" ] || die "invalid choice"
+        ask "Use /dev/$dev as the battery console?" || die "cancelled"
+        if [ "$DRY" = 1 ]; then
+            python3 "$SRC/pylontech_adopt.py" --use "/dev/$dev" --dry-run
+        else
+            python3 "$SRC/pylontech_adopt.py" --use "/dev/$dev" || die "cannot save the rule"
+        fi
     else
-        # no serial number (e.g. CH340): vendor/product in this USB socket
-        rule="ACTION==\"add\", SUBSYSTEM==\"tty\", ENV{ID_VENDOR_ID}==\"$(prop "$dev" ID_VENDOR_ID)\", ENV{ID_MODEL_ID}==\"$(prop "$dev" ID_MODEL_ID)\", ENV{ID_PATH}==\"$path\", ENV{VE_SERVICE}=\"ignore\", SYMLINK+=\"ttyPYLON\""
-        match="ID_PATH=$path"
-        say "$dev has no serial number: the rule is bound to this USB socket ($path)."
-        say "If the cable is moved to another USB socket, run the installer again with --reconfigure."
+        say "the cable is found automatically below"
     fi
-    say "udev rule (Venus OS leaves this adapter alone; fixed name /dev/ttyPYLON):"
-    say "   $rule"
-    ask "Use $dev as the battery console?" || die "cancelled"
-    do_ "echo '$rule' > '$BASE/udev.rules'"
-    do_ "echo '$match' > '$BASE/udev.match'"
 fi
 
 # -- 5. restore the rule at every boot ---------------------------------------------------------
@@ -201,38 +206,75 @@ fi
 
 # -- 6. apply now ------------------------------------------------------------------------------
 step "Applying the rule now"
-do_ "'$BASE/boot.sh'"
-if [ "$DRY" = 0 ]; then
-    sed 's/^/   /' "$BASE/boot.log"
-    i=0
-    while [ -e /dev/ttyPYLON ] && fuser /dev/ttyPYLON > /dev/null 2>&1 && [ $i -lt 15 ]; do sleep 1; i=$((i + 1)); done
+do_ "'$BASE/boot.sh' apply"
+# the last run's lines of the boot log
+[ "$DRY" = 0 ] && awk '/ pylontech-remote boot/ { b = "" } { b = b "   " $0 "\n" } END { printf "%s", b }' "$BASE/boot.log"
+if [ "$DRY" = 0 ] && [ ! -e /dev/ttyPYLON ]; then
+    step "Looking for the battery console cable"
+    python3 "$BASE/app/pylontech_adopt.py" --once --wait 30 | sed 's/^/   /'
+    if [ ! -e /dev/ttyPYLON ]; then
+        usb_report
+        say "Not found now. The search goes on in the background, and a cable plugged in later is"
+        say "found automatically (log: $BASE/adapter.log)."
+    fi
 fi
 
 # -- 7. test read ------------------------------------------------------------------------------
 step "Reading the battery (pwr, bat, info, stat, config - read only)"
+TEST=0
 if [ "$DRY" = 1 ]; then
     say "   [dry-run] skipped"
 elif [ ! -e /dev/ttyPYLON ]; then
-    say "skipped: /dev/ttyPYLON missing (cable not plugged in?)"
-elif fuser /dev/ttyPYLON > /dev/null 2>&1; then
-    say "skipped: the port is in use (pid $(fuser /dev/ttyPYLON 2> /dev/null))"
+    say "FAILED: no battery console cable (no /dev/ttyPYLON)."
+    TEST=1
 else
-    python3 "$BASE/app/pylontech_live.py" --port /dev/ttyPYLON --once --state-file '' > /tmp/pylontech-test.json 2> /tmp/pylontech-test.err
-    python3 - /tmp/pylontech-test.json << 'EOF' || say "test read failed - see /tmp/pylontech-test.err"
+    # Venus OS lets go of the port within seconds; wait until it has been free for 3 s
+    free=0; i=0
+    while [ $free -lt 3 ] && [ $i -lt 30 ]; do
+        if fuser /dev/ttyPYLON > /dev/null 2>&1; then free=0; else free=$((free + 1)); fi
+        sleep 1; i=$((i + 1))
+    done
+    TEST=1
+    rm -f "$BASE/diagnostics.txt"
+    for attempt in 1 2 3; do
+        [ $attempt -gt 1 ] && sleep 5
+        if fuser /dev/ttyPYLON > /dev/null 2>&1; then
+            say "   attempt $attempt: the port is in use (pid $(fuser /dev/ttyPYLON 2> /dev/null))"
+            continue
+        fi
+        # every command with its raw reply goes to diagnostics.txt (to adapt the program to
+        # other batteries and firmwares)
+        python3 "$BASE/app/pylontech_live.py" --port /dev/ttyPYLON --once --state-file '' \
+            --raw-dump "$BASE/diagnostics.txt" > /tmp/pylontech-test.json 2> /tmp/pylontech-test.err
+        if python3 - /tmp/pylontech-test.json "$attempt" << 'PYEOF'; then TEST=0; break; fi
 import json, sys
-snap = json.loads(open(sys.argv[1]).read().strip().splitlines()[-1])
+try:
+    snap = json.loads(open(sys.argv[1]).read().strip().splitlines()[-1])
+except (OSError, IndexError, ValueError):
+    snap = {'error': 'the reader gave no answer'}
 if not snap.get('ok'):
+    print('   attempt %s: %s' % (sys.argv[2], snap.get('error')))
     sys.exit(1)
 for m in snap['modules']:
-    print('   M%-2d %-8s %-18s fw %-12s %3s%%  %d cells' % (m['id'], m['model'], m['barcode'], m['fw'], m['soc_pct'], m['n_cells']))
-EOF
+    g = lambda k: '?' if m.get(k) is None else m.get(k)
+    print('   M%-2s %-8s %-18s fw %-12s %3s%%  %s cells' % (g('id'), g('model'), g('barcode'), g('fw'), g('soc_pct'), g('n_cells')))
+PYEOF
+        tail -n 5 /tmp/pylontech-test.err | sed 's/^/      /'
+    done
+    if [ $TEST = 1 ]; then
+        say "FAILED: the battery did not answer. The program is installed; check that the cable is in the"
+        say "CONSOLE port of the master module (the one connected to the Cerbo by BMS-CAN)."
+    fi
+    say "Raw replies of the battery: $BASE/diagnostics.txt"
 fi
 
 # -- done --------------------------------------------------------------------------------------
 step "Done"
 say "Node-RED: Menu > Import > Local (library) > pylontech-remote > Import, then Deploy."
 say "          (updating: delete the old Battery tab first)"
-say "Dashboard: http://<cerbo-ip>:1880/dashboard/battery"
-say "Boot log:  $BASE/boot.log   Uninstall: sh $BASE/uninstall.sh"
+say "Dashboard: https://<cerbo-ip>:1881/dashboard/battery   (VRM: Venus OS Large > Node-RED Dashboard 2.0)"
+say "Logs:      $BASE/boot.log, $BASE/adapter.log (cable search)   Uninstall: sh $BASE/uninstall.sh"
 [ "$DRY" = 1 ] && say "*** DRY RUN: nothing was changed ***"
-exit 0
+# battery not reached: keep searching / checking in the background (pylontech_adopt.py)
+[ "$TEST" = 1 ] && sh "$BASE/boot.sh" adopt
+exit $((TEST * 3))

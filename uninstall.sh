@@ -11,6 +11,7 @@ BASE=/data/pylontech
 NODERED=/data/home/nodered/.node-red
 RCS=/data/rcS.local
 RUN_RULE=/run/udev/rules.d/zz-pylontech-console.rules
+WATCH_RULE=/run/udev/rules.d/zz-pylontech-watch.rules
 MARK_BEGIN='# >>> pylontech-remote'
 MARK_END='# <<< pylontech-remote'
 
@@ -42,6 +43,15 @@ if [ -n "$running" ]; then
     do_ "kill $running"
     sleep 2
 fi
+# the cable search (it may have borrowed an adapter from Venus OS for a moment: give them back)
+search=$(ps | grep -v grep | grep -E 'pylontech_adopt\.py' | awk '{ print $1 }')
+if [ -n "$search" ]; then
+    say "Stopping the cable search (pid $search)"
+    do_ "kill $search"
+    for t in /sys/class/tty/ttyUSB*; do
+        [ -e "$t" ] && do_ "sh /opt/victronenergy/serial-starter/start-tty.sh $(basename "$t")"
+    done
+fi
 
 say "Boot hook in $RCS"
 if [ -f "$RCS" ] && grep -q "^$MARK_BEGIN" "$RCS"; then
@@ -58,8 +68,8 @@ else
     say "   not present"
 fi
 
-say "udev rule"
-do_ "rm -f '$RUN_RULE'"
+say "udev rules"
+do_ "rm -f '$RUN_RULE' '$WATCH_RULE'"
 do_ "udevadm control --reload-rules"
 say "   Venus OS will use the USB adapter again after the next restart."
 say "   Unplug the console cable from the battery before that, otherwise Venus OS probes the console."

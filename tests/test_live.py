@@ -173,6 +173,22 @@ class StatsGroupingTest(unittest.TestCase):
         self.assertNotIn('Device address', [l for grp in g.values() for l, _, _ in grp])
         self.assertEqual(sum(len(x) for x in g.values()), len(fields) - 1)
 
+    def test_older_firmware_reports_no_time_in_ranges(self):
+        # B69.13 (US3000C, 2022): `stat` ends after LifeAlarm Times, prompt "pylon>"
+        from pylontech_remote import parsers
+        from pylontech_remote.live import StackState, group_stats
+        from tests.fakeconsole import _fixture
+        text = _fixture('stat_b69.13.raw').decode()
+        g = group_stats(parsers.parse_stat(text)['fields'])
+        self.assertEqual(g['time'], [])
+        self.assertEqual([l for l, _, _ in g['records']], ['Data Items', 'HisData Items'])
+        alarms = dict((l, v) for l, v, _ in g['alarms'])
+        self.assertEqual(alarms['Bat OV Times'], '1784')
+        self.assertIn(['CYCLE Times', '627', '627'], g['operation'])
+        a = StackState()
+        a.update_stat(1, text)
+        self.assertEqual(a.stat[1]['soh_pct'], 94)
+
     def test_counters_survive_saving(self):
         from pylontech_remote.live import StackState
         from tests.fakeconsole import _fixture

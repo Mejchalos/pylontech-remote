@@ -34,7 +34,8 @@ import zipfile
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from pylontech_remote import export, parsers                     # noqa: E402
-from pylontech_remote.session import ConsoleSession, ConsoleError, default_port  # noqa: E402
+from pylontech_remote.session import (ConsoleSession, ConsoleError, default_port,  # noqa: E402
+                                      missing_port_message)
 
 RETRIES = 5
 CRLF = '\r\n'
@@ -377,6 +378,10 @@ def main():
     signal.signal(signal.SIGTERM, _on_signal)
     signal.signal(signal.SIGINT, _on_signal)
 
+    missing = missing_port_message(a.port)
+    if missing:
+        emit({'type': 'error', 'error': missing})
+        return 2
     session = ConsoleSession(a.port, gap=a.gap)
     try:
         session.open()
