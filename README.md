@@ -7,8 +7,8 @@ battery, without a technician on site.
 - **Logs for a warranty claim** — the event and history logs as the files Pylontech BatteryView
   saves, as a ZIP from the dashboard: of the module the cable is plugged into (verbatim), or of
   the whole stack through the master. Works through VRM, without a technician on site.
-- **Live view** — pack, modules and cells of the whole stack, updated every 8 s, plus the
-  lifetime counters of each module.
+- **Live view** — pack, modules and cells of the whole stack, updated every 8 s (larger stacks
+  take longer), plus the lifetime counters of each module.
 
 The Victron CAN bus only exposes pack-level values. The console of the **master** module gives
 per-module and per-cell data for the whole stack, and the stored records of every module.
@@ -29,7 +29,7 @@ the Cerbo unattended for years, through Venus OS updates. Not there yet:
 |---|---|
 | USB adapter | The original project was built with an **FTDI** (FT232R) adapter. This version is developed and tested with a **CH340** adapter (udev rule bound to the USB socket). Moving back to FTDI (rule bound to the adapter's serial number) is planned. |
 | Cable found automatically | A new or replaced cable is found without the installer, a CH340 is checked whenever it appears ([A new or replaced cable](#a-new-or-replaced-cable)). Implemented and tested in simulation; not yet tested on hardware. |
-| Venus OS updates | The udev rule is restored at every boot from `/data` (see [Keep Venus OS away from the port](#keep-venus-os-away-from-the-port)). Verified after a restart (the rule is in place before serial-starter starts; it no longer touches the port). Not yet verified across a Venus OS update. |
+| Venus OS updates | The udev rule is restored at every boot from `/data` (see [Keep Venus OS away from the port](#keep-venus-os-away-from-the-port)). Verified after a restart (the rule is in place before serial-starter starts; it no longer touches the port). Verified across a Venus OS update (v3.80 → v3.81): Live kept working. |
 | Installation | [From a USB stick](#from-a-usb-stick-no-ssh) without SSH, or [over SSH](#over-ssh). USB stick used on two Cerbos (Venus OS v3.80 and v3.81), SSH on one. Uninstall from a USB stick: not yet tested. |
 | Other batteries | Only tested on US3000C with firmware B69.25. Other models, firmwares and stacks still need testing; console output and relaying of the other modules may differ. Every installation saves the battery's raw replies (`diagnostics.txt`) to adapt the program to them. |
 | Export of the connected module | Tested with the cable on the master. With the cable on another module: implemented, not yet tested on hardware. |
@@ -109,7 +109,8 @@ socket, so the adapter is checked whenever it appears (boot, plugged in):
 Given to Venus OS means the rule is moved to `/data/pylontech/backup/` and the search above takes
 over: an energy meter is then found by Venus OS and never touched again, the battery console is
 found again as soon as the battery answers. A cable with a serial number (FTDI) is not checked:
-its rule matches that one cable only.
+its rule matches that one cable only, in any USB socket: moved to another socket it is
+`/dev/ttyPYLON` again at once. Unplugging stops Live; press **Start Live** again.
 
 Each change is written to `/data/pylontech/adapter.log`. Timing: `pylontech_remote/adapters.py`.
 
@@ -125,8 +126,8 @@ Plug the console cable into the Cerbo first (or later: it is then
 
 ### From a USB stick (no SSH)
 
-1. Download [`venus-runtime-pylontech-install.tar.gz`](https://github.com/Mejchalos/pylontech-remote/releases/latest/download/venus-runtime-pylontech-install.tar.gz)
-   from the [latest release](https://github.com/Mejchalos/pylontech-remote/releases/latest) and copy
+1. Download [`venus-runtime-pylontech-install.tar.gz`](https://github.com/pesekmudra/pylontech-remote/releases/latest/download/venus-runtime-pylontech-install.tar.gz)
+   from the [latest release](https://github.com/pesekmudra/pylontech-remote/releases/latest) and copy
    it, unchanged, to the root of a FAT32 USB stick.
 2. Plug the stick into any free USB port of the Cerbo. About a minute later the program is
    installed: Venus OS unpacks every `venus-runtime-*.tar.gz` from an inserted stick into `/data`
@@ -153,7 +154,7 @@ The same file updates an installation. The archives can also be built from the r
 On the Cerbo, as root:
 
 ```bash
-wget -O /tmp/pylontech-install.sh https://raw.githubusercontent.com/Mejchalos/pylontech-remote/main/install.sh
+wget -O /tmp/pylontech-install.sh https://raw.githubusercontent.com/pesekmudra/pylontech-remote/main/install.sh
 sh /tmp/pylontech-install.sh
 ```
 
@@ -187,7 +188,7 @@ the dashboard is then reachable on the local network.
 
 ### Uninstall
 
-- USB stick: [`venus-runtime-pylontech-uninstall.tar.gz`](https://github.com/Mejchalos/pylontech-remote/releases/latest/download/venus-runtime-pylontech-uninstall.tar.gz),
+- USB stick: [`venus-runtime-pylontech-uninstall.tar.gz`](https://github.com/pesekmudra/pylontech-remote/releases/latest/download/venus-runtime-pylontech-uninstall.tar.gz),
   the same way as the installation (log: `pylontech-uninstall-log.txt`). It removes the boot hook,
   the udev rules and `/data/pylontech` including the exported logs, and stops Live if it runs.
   Never put the install and the uninstall archive on the same stick.
@@ -230,9 +231,11 @@ battery drops from its ring buffer during the run are handled. Details:
 
 Dark page with a header and two buttons, **Start Live** / **Stop Live** (the active one is
 filled). Live needs the cable on the master. It reads the stack summary (`pwr`) and the cells of
-every module (`bat N`) every **8 s**; the whole page updates at once. Model, serial, firmware,
-SOH, cycles and thresholds are kept in `/data/pylontech/state/static.json`, so the page is
-complete from the first update. Live switches itself off after **30 min** and frees the port.
+every module (`bat N`), at most every **8 s**: one command per module, ~1.5 s each, so 4 modules
+take ~8 s, 12 modules ~20 s, 16 modules ~25 s. The whole page updates at once and shows the
+measured period ("updates every ~N s"). Model, serial, firmware, SOH, cycles and thresholds are
+kept in `/data/pylontech/state/static.json`, so the page is complete from the first update.
+Live switches itself off after **30 min** and frees the port.
 
 - **Stack**: SOC (Ah, kWh), power, voltage, cell spread with the lowest and highest cell,
   temperatures, SOH and cycles.

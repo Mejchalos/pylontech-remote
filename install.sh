@@ -1,7 +1,7 @@
 #!/bin/sh
 # pylontech-remote installer for Victron Venus OS (Cerbo GX). Run as root on the Cerbo:
 #
-#   wget -O /tmp/pylontech-install.sh https://raw.githubusercontent.com/Mejchalos/pylontech-remote/main/install.sh
+#   wget -O /tmp/pylontech-install.sh https://raw.githubusercontent.com/pesekmudra/pylontech-remote/main/install.sh
 #   sh /tmp/pylontech-install.sh
 #
 # Installs or updates the program in /data/pylontech, keeps Venus OS's serial-starter away from
@@ -20,7 +20,7 @@
 # The battery only ever receives read commands (a test read at the end).
 # Exit code: 0 done, 1 failed (see the message), 3 installed but the battery did not answer.
 
-REPO=Mejchalos/pylontech-remote
+REPO=pesekmudra/pylontech-remote
 BRANCH=main
 BASE=/data/pylontech
 NODERED=/data/home/nodered/.node-red

@@ -10,6 +10,7 @@
 #   pylontech-results.txt                   one line per installation: date, Cerbo, result
 #   pylontech-logs/<id>-install-log.txt     the installer's output, newest run first
 #   pylontech-logs/<id>-diagnostics.txt     the battery's raw replies (contain serial numbers)
+#   pylontech-logs/<id>-state.txt           the USB serial adapters before the installer runs
 #
 # A stick left in the Cerbo is processed again at boot; then nothing is done if this version is
 # already installed.
@@ -20,6 +21,46 @@ RUN=/tmp/pylontech-install.run
 LOG=/tmp/pylontech-install.log
 ID=$(get-unique-id 2> /dev/null)
 [ -n "$ID" ] || ID=unknown
+
+# The USB serial adapters as they are now, before the installer changes anything (to find out
+# why a cable was not found): pylontech-logs/<id>-state.txt, newest first.
+state() {
+    echo "pylontech-remote adapter state, $(date '+%Y-%m-%d %H:%M:%S'), Cerbo $ID, up $(cut -d' ' -f1 /proc/uptime) s"
+    echo; echo '## devices'
+    ls -l /dev/ttyPYLON /dev/ttyUSB* /dev/serial-starter/ 2>&1
+    for d in /dev/ttyUSB*; do
+        [ -e "$d" ] || continue
+        echo; echo "## $d"
+        udevadm info -q property -n "$d" 2>&1 \
+            | grep -E '^(ID_USB_DRIVER|ID_MODEL|ID_SERIAL_SHORT|ID_PATH|VE_SERVICE|DEVLINKS)='
+        for p in /proc/[0-9]*; do
+            ls -l "$p/fd" 2> /dev/null | grep -q " $d\$" \
+                && echo "open by pid ${p#/proc/}: $(tr '\0' ' ' < "$p/cmdline")"
+        done
+    done
+    echo; echo '## Venus OS services on USB serial adapters'
+    ls /service 2> /dev/null | grep -i ttyUSB
+    echo; echo '## udev rules'
+    for f in /run/udev/rules.d/zz-pylontech-*.rules /data/pylontech/udev.rules /data/pylontech/udev.match; do
+        echo "-- $f"; cat "$f" 2>&1
+    done
+    echo; echo '## running'
+    ps | grep -E 'pylontech_|serial-starter' | grep -v grep
+    echo; echo '## kernel (USB plug-in / unplug)'
+    dmesg 2> /dev/null | grep -iE 'ttyUSB|ftdi|ch341|usb [0-9-]+(\.[0-9]+)*: (new|USB disconnect)' | tail -n 40
+    echo; echo '## /data/pylontech/boot.log'
+    cat /data/pylontech/boot.log 2>&1
+    echo; echo '## /data/pylontech/adapter.log (end)'
+    tail -n 60 /data/pylontech/adapter.log 2>&1
+}
+state > /tmp/pylontech-state.txt 2>&1
+for a in /media/*/venus-runtime-pylontech-install*.tar.gz; do
+    [ -f "$a" ] || continue
+    out="$(dirname "$a")/pylontech-logs/$ID-state.txt"
+    mkdir -p "$(dirname "$out")"
+    { cat /tmp/pylontech-state.txt; printf '\n\n========== earlier ==========\n\n'
+      [ -f "$out" ] && head -n 1500 "$out"; } > "$out.new" && mv "$out.new" "$out"
+done
 
 uptime=$(cut -d. -f1 /proc/uptime)
 if [ "$uptime" -lt 300 ] && [ -f "$SRC/VERSION" ] && [ -f /data/pylontech/VERSION ] \
